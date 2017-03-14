@@ -20,10 +20,11 @@ PROBLEMS TO SOLVE:
 TODO:
 
 - Implement v1  (one client + 1 kvnode, support ACI transactions)
+	"Start by creating a transactional key-value service with a single node and a single connecting client. Have this service support transactional semantics without handling node/client failures."
 
-	learn to import a library for client.
+	learn to import a library for client. 
 
-		have code in specific folder?
+		DONE have code in specific folder? DONE
 		set Go variables?
 		get code from remote repo?
 
