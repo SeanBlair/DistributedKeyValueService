@@ -1,3 +1,48 @@
-PROBLEMS:
+PROBLEMS TO SOLVE:
+
+	- Deadlock scenario: 2 transactions depend each other releasing their locks
+		Solution: choose best transaction to abort, abort it.
+
+	- Wait for keys available, when other transaction is involved with overlapping key sets.
+
+	- On commit release locked keys.
+
+	- Support abort (roll back all previous puts)
+		Solution: All puts must be stored for uncommited transactions, remembering the original (pre-put value)
+		If null, eliminate (was no key pre-put), else restore original value
+		On abort, all stored puts must be undone.
+
+	- Locking.
+		Solution: Each transaction stores a list of keys it depends on. If a transaction needs access to a key
+		in this list, it must wait. If deadlock, abort 1 transaction and remove its keys from lockedKeys list.
+		On commit, remove keys from lockedKeys list.
 
 TODO:
+
+- Implement v1  (one client + 1 kvnode, support ACI transactions)
+
+	learn to import a library for client.
+
+		have code in specific folder?
+		set Go variables?
+		get code from remote repo?
+
+	implement basic library
+
+
+
+	implement basic kvnode
+
+		support transactions
+
+			new
+
+			put
+
+			get
+
+			commit
+
+			abort
+
+	test
