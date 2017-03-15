@@ -17,8 +17,8 @@ import "fmt"
 
 func main() {
 	var nodes []string
-	nodes = append(nodes, "alice:2001")
-	nodes = append(nodes, "bob:2010")
+	nodes = append(nodes, "localhost:2222")
+	// nodes = append(nodes, "bob:2010")
 
 	c := kvservice.NewConnection(nodes)
 	fmt.Printf("NewConnection returned: %v\n", c)

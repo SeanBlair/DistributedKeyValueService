@@ -8,7 +8,12 @@ client to access the key-value service in assignment 6 for UBC CS 416
 
 package kvservice
 
-import "fmt"
+import (
+	"fmt"
+	"net/rpc"
+	"log"
+	"os"
+	)
 
 // Represents a key in the system.
 type Key string
@@ -60,16 +65,37 @@ type tx interface {
 	Abort()
 }
 
+///////////// Our variables////////////
+
+var (
+	kvNodesIpPorts []string
+)
+
+type KVServer int
+
+type NewTransactionResp struct {
+	ID int
+}
+
+
+///////////////////////////////////////
+
+
+
+
 //////////////////////////////////////////////
 
 // The 'constructor' for a new logical connection object. This is the
 // only way to create a new connection. Takes a set of k-v service
 // node ip:port strings.
 func NewConnection(nodes []string) connection {
-	fmt.Printf("NewConnection\n")
+	fmt.Printf("NewConnection with nodes:\n", nodes)
+
+	kvNodesIpPorts = nodes
 	c := new(myconn)
 	return c
 }
+
 
 //////////////////////////////////////////////
 // Connection interface
@@ -83,7 +109,20 @@ type myconn struct {
 func (conn *myconn) NewTX() (tx, error) {
 	fmt.Printf("NewTX\n")
 	m := new(mytx)
+	m.ID = getNewTXID()
 	return m, nil
+}
+
+func getNewTXID() int {
+	req := true
+	var resp NewTransactionResp
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in getNewTXID()", err, true)
+	err = client.Call("KVServer.NewTransaction", req, &resp)
+	checkError("client.Call(KVServer.NewTransaction) in getNewTXID(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in getNewTXID(): ", err, true)
+	return resp.ID
 }
 
 // Close the connection.
@@ -101,6 +140,7 @@ func (conn *myconn) Close() {
 // Concrete implementation of a tx interface.
 type mytx struct {
 	// TODO
+	ID int
 }
 
 // Retrieves a value v associated with a key k.
@@ -132,3 +172,14 @@ func (t *mytx) Abort() {
 
 // /Transaction interface
 //////////////////////////////////////////////
+
+
+// Prints msg + err to console and exits program if exit == true
+func checkError(msg string, err error, exit bool) {
+	if err != nil {
+		log.Println(msg, err)
+		if exit {
+			os.Exit(-1)
+		}
+	}
+}
