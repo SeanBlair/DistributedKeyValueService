@@ -116,7 +116,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
 
 	} else {
-		setTransactionRecord(req)
+		setPutTransactionRecord(req)
 
 		theValueStore[req.Key] = req.Value
 
@@ -126,7 +126,9 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	return nil
 }
 
-func setTransactionRecord(req PutRequest) {
+func setPutTransactionRecord(req PutRequest) {
+	// TODO refactor to support tx.PutList being a PutSet
+	// only set put if key not in PutMap
 	put := Put{}
 	if isKeyInStore(req.Key) {
 		put.IsNewKey = false
