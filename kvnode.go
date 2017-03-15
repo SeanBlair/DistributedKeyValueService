@@ -23,8 +23,11 @@ var (
 	theValueStore map[string]string
 )
 
+
+
 type Transaction struct {
 	ID int
+	// TODO make this a set (map), only need to undo the first Put in a transaction
 	PutList []Put
 	KeySet map[string]bool
 	IsAborted bool
@@ -36,20 +39,6 @@ type Put struct {
 	Value string
 	PreviousValue string
 	IsNewKey bool
-}
-
-func main() {
-	err := ParseArguments()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("nodesFile:", nodesFile, "nodeID:", nodeID, "listenNodeIpPort", listenNodeIpPort, "listenClientIpPort", listenClientIpPort)
-
-	nextTransactionId = 1
-	transactions = make(map[int]Transaction)
-	theValueStore = make(map[string]string)
-
-	listenClients()
 }
 
 type KVServer int
@@ -69,9 +58,59 @@ type PutResponse struct {
 	Err error 
 }
 
+func main() {
+	err := ParseArguments()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Command line arguments are: nodesFile:", nodesFile, "nodeID:", nodeID, 
+		"listenNodeIpPort", listenNodeIpPort, "listenClientIpPort", listenClientIpPort)
+
+	fmt.Println("KVNode with id:", nodeID, "is Alive!!")
+
+	nextTransactionId = 1
+	transactions = make(map[int]Transaction)
+	theValueStore = make(map[string]string)
+
+	printState()
+
+	listenClients()
+}
+
+func printState() {
+	fmt.Println("\nKVNODE STATE:")
+	fmt.Println("-TheValueStore:")
+	for k := range theValueStore {
+		fmt.Println("    Key:", k, "Value:", theValueStore[k])
+	}
+	fmt.Println("-Transactions:")
+	for txId := range transactions {
+		tx := transactions[txId]
+		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited", tx.IsCommited)
+		fmt.Println("    KeySet:", getKeySetSlice(tx))
+		fmt.Println("    PutList:")
+		for _, put := range tx.PutList {
+			fmt.Println("      ", getPutString(put), put.IsNewKey)
+		}
+	}
+}
+
+func getPutString(put Put) string {
+	return "Key:" + put.Key + " Value:" + put.Value + " PreviousValue:" + 
+	put.PreviousValue + " IsNewKey:"
+}
+
+func getKeySetSlice(tx Transaction) (keySetString []string) {
+	keySet := tx.KeySet
+	for key := range keySet {
+		keySetString = append(keySetString, key)
+	}
+	return
+}
+
+
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
-	fmt.Println("Received a call to Put()")
-	fmt.Println("theValueStore before call to Put():", theValueStore)
+	fmt.Println("\nReceived a call to Put()")
 
 	if transactions[req.TxID].IsAborted {
 		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
@@ -80,15 +119,14 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		setTransactionRecord(req)
 
 		theValueStore[req.Key] = req.Value
-		fmt.Println("theValueStore after call to Put():", theValueStore)
 
 		*resp = PutResponse{true, nil}
 	}
+	printState()
 	return nil
 }
 
 func setTransactionRecord(req PutRequest) {
-	fmt.Println("transactions before setting new Transaction:", transactions)
 	put := Put{}
 	if isKeyInStore(req.Key) {
 		put.IsNewKey = false
@@ -105,7 +143,6 @@ func setTransactionRecord(req PutRequest) {
 	tx.KeySet[req.Key] = true
 
 	transactions[req.TxID] = tx
-	fmt.Println("transactions after setting new Transaction:", transactions)
 }
 
 func isKeyInStore(k string) bool {
@@ -114,13 +151,14 @@ func isKeyInStore(k string) bool {
 }
 
 func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
-	fmt.Println("Received a call to NewTransaction()")
+	fmt.Println("\nReceived a call to NewTransaction()")
 	tID := nextTransactionId
 	nextTransactionId++
 	var putList []Put 
 	tx := Transaction{tID, putList, make(map[string]bool), false, false}
 	transactions[tID] = tx
 	*resp = NewTransactionResp{tID}
+	printState()
 	return nil
 }
 
@@ -130,7 +168,7 @@ func listenClients() {
 	kvServer.Register(kv)
 	l, err := net.Listen("tcp", listenClientIpPort)
 	checkError("Error in listenClients(), net.Listen()", err, true)
-	fmt.Println("listening for rpc calls on:", listenClientIpPort)
+	fmt.Println("Listening for client rpc calls on:", listenClientIpPort)
 	for {
 		conn, err := l.Accept()
 		checkError("Error in listenClients(), l.Accept()", err, true)
