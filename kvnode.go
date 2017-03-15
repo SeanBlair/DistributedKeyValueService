@@ -17,8 +17,24 @@ var (
 	nodeID int
 	listenNodeIpPort string
 	listenClientIpPort string
+	transactions map[int]Transaction
+	nextTransactionId int
 )
 
+type Transaction struct {
+	ID int
+	PutList []Put
+	KeySet map[string]bool
+	isAborted bool
+	isCommited bool
+}
+
+type Put struct {
+	Key string
+	Value string
+	PreviousValue string
+	isNewKey bool
+}
 
 func main() {
 	err := ParseArguments()
@@ -26,6 +42,9 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("nodesFile:", nodesFile, "nodeID:", nodeID, "listenNodeIpPort", listenNodeIpPort, "listenClientIpPort", listenClientIpPort)
+
+	nextTransactionId = 1
+	transactions = make(map[int]Transaction)
 
 	listenClients()
 }
@@ -38,7 +57,12 @@ type NewTransactionResp struct {
 
 func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	fmt.Println("Received a call to NewTransaction()")
-	*resp = NewTransactionResp{77}
+	tID := nextTransactionId
+	nextTransactionId++
+	var putList []Put 
+	tx := Transaction{tID, putList, make(map[string]bool), false, false}
+	transactions[tID] = tx
+	*resp = NewTransactionResp{tID}
 	return nil
 }
 
