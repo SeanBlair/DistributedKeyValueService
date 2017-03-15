@@ -1,7 +1,9 @@
 PROBLEMS TO SOLVE:
 
 	- Deadlock scenario: 2 transactions depend each other releasing their locks
+		Identify a deadlock: find loops in graphs of transaction -> keys
 		Solution: choose best transaction to abort, abort it.
+
 
 	- Wait for keys available, when other transaction is involved with overlapping key sets.
 
@@ -12,7 +14,9 @@ PROBLEMS TO SOLVE:
 		If null, eliminate (was no key pre-put), else restore original value
 		On abort, all stored puts must be undone.
 
+
 	- Locking.
+	
 		Solution: Each transaction stores a list of keys it depends on. If a transaction needs access to a key
 		in this list, it must wait. If deadlock, abort 1 transaction and remove its keys from lockedKeys list.
 		On commit, remove keys from lockedKeys list.
@@ -23,8 +27,6 @@ TODO:
 	"Start by creating a transactional key-value service with a single node and a single connecting client. Have this service support transactional semantics without handling node/client failures."
 
 	learn to import a library for client. 
-
-		DONE have code in specific folder? DONE
 		set Go variables?
 		get code from remote repo?
 
@@ -35,8 +37,6 @@ TODO:
 	implement basic kvnode
 
 		support transactions
-
-			new
 
 			put
 
