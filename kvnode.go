@@ -86,7 +86,7 @@ func printState() {
 	fmt.Println("-Transactions:")
 	for txId := range transactions {
 		tx := transactions[txId]
-		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited", tx.IsCommited)
+		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited:", tx.IsCommited)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutList:")
 		for _, put := range tx.PutList {
