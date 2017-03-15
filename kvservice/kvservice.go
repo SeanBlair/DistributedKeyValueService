@@ -77,6 +77,16 @@ type NewTransactionResp struct {
 	ID int
 }
 
+type PutRequest struct {
+	TxID int
+	Key string
+	Value string
+}
+
+type PutResponse struct {
+	Success bool
+	Err error 
+}
 
 ///////////////////////////////////////
 
@@ -154,7 +164,20 @@ func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 func (t *mytx) Put(k Key, v Value) (success bool, err error) {
 	fmt.Printf("Put\n")
 	// TODO
-	return true, nil
+	success, err = callPutRPC(t.ID, string(k), string(v))
+	return
+}
+
+func callPutRPC(transactionId int, key string, value string) (bool, error) {
+	req := PutRequest{transactionId, key, value}
+	var resp PutResponse
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in callPutRPC()", err, true)
+	err = client.Call("KVServer.Put", req, &resp)
+	checkError("client.Call(KVServer.Put) in callPutRPC(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in callPutRPC(): ", err, true)
+	return resp.Success, resp.Err
 }
 
 // Commits the transaction.

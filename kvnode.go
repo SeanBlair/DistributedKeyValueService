@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/rpc"
 	// "net/url"
+	"errors"
 	"os"
 	"strconv"
 	// "strings"
@@ -19,21 +20,22 @@ var (
 	listenClientIpPort string
 	transactions map[int]Transaction
 	nextTransactionId int
+	theValueStore map[string]string
 )
 
 type Transaction struct {
 	ID int
 	PutList []Put
 	KeySet map[string]bool
-	isAborted bool
-	isCommited bool
+	IsAborted bool
+	IsCommited bool
 }
 
 type Put struct {
 	Key string
 	Value string
 	PreviousValue string
-	isNewKey bool
+	IsNewKey bool
 }
 
 func main() {
@@ -45,6 +47,7 @@ func main() {
 
 	nextTransactionId = 1
 	transactions = make(map[int]Transaction)
+	theValueStore = make(map[string]string)
 
 	listenClients()
 }
@@ -53,6 +56,61 @@ type KVServer int
 
 type NewTransactionResp struct {
 	ID int
+}
+
+type PutRequest struct {
+	TxID int
+	Key string
+	Value string
+}
+
+type PutResponse struct {
+	Success bool
+	Err error 
+}
+
+func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
+	fmt.Println("Received a call to Put()")
+	fmt.Println("theValueStore before call to Put():", theValueStore)
+
+	if transactions[req.TxID].IsAborted {
+		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
+
+	} else {
+		setTransactionRecord(req)
+
+		theValueStore[req.Key] = req.Value
+		fmt.Println("theValueStore after call to Put():", theValueStore)
+
+		*resp = PutResponse{true, nil}
+	}
+	return nil
+}
+
+func setTransactionRecord(req PutRequest) {
+	fmt.Println("transactions before setting new Transaction:", transactions)
+	put := Put{}
+	if isKeyInStore(req.Key) {
+		put.IsNewKey = false
+		put.PreviousValue = theValueStore[req.Key]
+	} else {
+		put.IsNewKey = true
+	}
+	put.Key = req.Key
+	put.Value = req.Value
+
+	tx := transactions[req.TxID]
+
+	tx.PutList = append(tx.PutList, put)
+	tx.KeySet[req.Key] = true
+
+	transactions[req.TxID] = tx
+	fmt.Println("transactions after setting new Transaction:", transactions)
+}
+
+func isKeyInStore(k string) bool {
+	_, ok := theValueStore[k]
+	return ok
 }
 
 func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
