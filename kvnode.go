@@ -148,7 +148,15 @@ func abort(txId int) {
 
 // returns true if myId should abort, otherwise couses otherId to abort
 func resolveDeadLock(myId int, otherId int) bool {
-	return false
+	myKeySet := transactions[myId].KeySet
+	otherKeySet := transactions[otherId].KeySet
+	if len(myKeySet) >= len(otherKeySet) {
+		abort(otherId)
+		return true
+	} else {
+		abort(myId)
+		return false
+	}
 }
 
 // TODO
@@ -165,7 +173,7 @@ func canAccessKey(key string, myId int) (bool, int) {
 		for k := range transactions {
 			tr:= transactions[k]
 			_, ok = tr.KeySet[key]
-			if ok {
+			if ok && !tr.IsAborted && !tr.IsCommited {
 				return false, tr.ID	
 			}
 		}
