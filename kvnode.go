@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/rpc"
+	"time"
 	// "net/url"
 	"errors"
 	"os"
@@ -27,18 +28,10 @@ var (
 
 type Transaction struct {
 	ID int
-	// TODO make this a set (map), only need to undo the first Put in a transaction
-	PutList []Put
+	PutToDoMap map[string]string 
 	KeySet map[string]bool
 	IsAborted bool
 	IsCommited bool
-}
-
-type Put struct {
-	Key string
-	Value string
-	PreviousValue string
-	IsNewKey bool
 }
 
 type KVServer int
@@ -89,15 +82,10 @@ func printState() {
 		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited:", tx.IsCommited)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutList:")
-		for _, put := range tx.PutList {
-			fmt.Println("      ", getPutString(put), put.IsNewKey)
+		for k := range tx.PutToDoMap {
+			fmt.Println("      Key:", k, "Value:", tx.PutToDoMap[k])
 		}
 	}
-}
-
-func getPutString(put Put) string {
-	return "Key:" + put.Key + " Value:" + put.Value + " PreviousValue:" + 
-	put.PreviousValue + " IsNewKey:"
 }
 
 func getKeySetSlice(tx Transaction) (keySetString []string) {
@@ -108,42 +96,87 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 	return
 }
 
-
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	fmt.Println("\nReceived a call to Put()")
 
 	if transactions[req.TxID].IsAborted {
 		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
-
+	} else if transactions[req.TxID].IsCommited {
+		*resp = PutResponse{false, errors.New("Transaction is already commited")}
 	} else {
+		canAccess, trId := canAccessKey(req.Key, req.TxID)
+		for  !canAccess {
+			if isDeadlock(req.TxID, trId) {
+				isAbort := resolveDeadLock(req.TxID, trId)
+				if isAbort {
+					abort(req.TxID)
+					*resp = PutResponse{false, errors.New("Transaction is aborted")}
+					return nil 
+				}	 	
+			} else {
+				// lock this data structure
+				// and take self out when not waiting.
+				addToWaitingMap(req.TxID, trId)
+			}
+			time.Sleep(time.Millisecond * 100)
+			canAccess, trId = canAccessKey(req.Key, req.TxID)
+		}
+		removeFromWaitingMap(req.TxID)
 		setPutTransactionRecord(req)
-
-		theValueStore[req.Key] = req.Value
-
 		*resp = PutResponse{true, nil}
 	}
 	printState()
 	return nil
 }
 
-func setPutTransactionRecord(req PutRequest) {
-	// TODO refactor to support tx.PutList being a PutSet
-	// only set put if key not in PutMap
-	put := Put{}
-	if isKeyInStore(req.Key) {
-		put.IsNewKey = false
-		put.PreviousValue = theValueStore[req.Key]
+// TODO implement
+func removeFromWaitingMap(txId int) {
+}
+
+// TODO implement
+func addToWaitingMap(myId int, waitingForId int) {
+}
+
+// TODO remove from waitingMap
+// TODO remove KeySet??
+func abort(txId int) {
+	tx := transactions[txId]
+	tx.IsAborted = true
+	transactions[txId] = tx
+}
+
+
+// returns true if myId should abort, otherwise couses otherId to abort
+func resolveDeadLock(myId int, otherId int) bool {
+	return false
+}
+
+// TODO
+func isDeadlock(myId int, otherId int) bool {
+	return false
+}
+
+func canAccessKey(key string, myId int) (bool, int) {
+	tx := transactions[myId]
+	_, ok := tx.KeySet[key] 
+	if ok {
+		return true, 0
 	} else {
-		put.IsNewKey = true
+		for k := range transactions {
+			tr:= transactions[k]
+			_, ok = tr.KeySet[key]
+			if ok {
+				return false, tr.ID	
+			}
+		}
+		return true, 0
 	}
-	put.Key = req.Key
-	put.Value = req.Value
+}
 
+func setPutTransactionRecord(req PutRequest) {
 	tx := transactions[req.TxID]
-
-	tx.PutList = append(tx.PutList, put)
+	tx.PutToDoMap[req.Key] = req.Value 
 	tx.KeySet[req.Key] = true
-
 	transactions[req.TxID] = tx
 }
 
@@ -156,8 +189,7 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	fmt.Println("\nReceived a call to NewTransaction()")
 	tID := nextTransactionId
 	nextTransactionId++
-	var putList []Put 
-	tx := Transaction{tID, putList, make(map[string]bool), false, false}
+	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false}
 	transactions[tID] = tx
 	*resp = NewTransactionResp{tID}
 	printState()
