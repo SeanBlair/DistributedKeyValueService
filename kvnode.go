@@ -179,24 +179,31 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 				isAbort := resolveDeadLock(req.TxID, ids)
 				if isAbort {
 					removeFromWaitingMap(req.TxID)
-					*resp = GetResponse{false, returnVal, "Transaction is aborted"}
+					*resp = GetResponse{false, returnVal, "Transaction was aborted"}
+					printState()
 					return nil 
 				}	 	
 			} else {
 				// TODO lock this data structure
-				// and take self out when not waiting.
 				addToWaitingMap(req.TxID, trId)
 			}
 			time.Sleep(time.Millisecond * 100)
+			// Other transaction aborted me
+			if transactions[req.TxID].IsAborted {
+				removeFromWaitingMap(req.TxID)
+				*resp = GetResponse{false, returnVal, "Transaction was aborted"}
+				printState()
+				return nil
+			}
+			// Reset loop guard
 			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
 		}
+		// Happy path
 		removeFromWaitingMap(req.TxID)
 		updateKeySet(req.TxID, string(req.Key))
-
 		returnVal = getValue(req.TxID, string(req.Key))
 		*resp = GetResponse{true,  returnVal, ""}
 	}
-
 	printState()
 	return nil
 }
@@ -219,31 +226,43 @@ func updateKeySet(tid int, key string) {
 
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	fmt.Println("\nReceived a call to Put()")
-
 	if transactions[req.TxID].IsAborted {
-		// *resp = PutResponse{false, errors.New("Transaction is already aborted")}
 		*resp = PutResponse{false, "Transaction is already aborted"}
 	} else if transactions[req.TxID].IsCommitted {
 		*resp = PutResponse{false, "Transaction is already commited"}
 	} else {
+		// true if no transaction owns req.Key
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
 		for  !canAccess {
+			fmt.Println("transactionID:", req.TxID , "Can't Access!! Key:", req.Key, "owned by:", trId)
 			var ids []int
+			// There is a cycle starting at trId and ending at me
 			if isDeadlock(req.TxID, trId, &ids)  {
+				// aborts correct transaction
 				isAbort := resolveDeadLock(req.TxID, ids)
+				// I was aborted
 				if isAbort {
 					removeFromWaitingMap(req.TxID)
-					*resp = PutResponse{false, "Transaction is aborted"}
+					*resp = PutResponse{false, "Transaction was aborted"}
+					printState()
 					return nil 
 				}	 	
 			} else {
-				// TODO lock this data structure
-				// and take self out when not waiting.
+				// TODO lock this data structure??
 				addToWaitingMap(req.TxID, trId)
 			}
 			time.Sleep(time.Millisecond * 100)
+			// Other transaction aborted me
+			if transactions[req.TxID].IsAborted {
+				removeFromWaitingMap(req.TxID)
+				*resp = PutResponse{false, "Transaction was aborted"}
+				printState()
+				return nil
+			}
+			// Reset loop guard
 			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
 		}
+		// Happy path
 		removeFromWaitingMap(req.TxID)
 		setPutTransactionRecord(req)
 		*resp = PutResponse{true, ""}
@@ -255,11 +274,13 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 // TODO implement
 func removeFromWaitingMap(txId int) {
 	delete(waitingMap, txId)
+	fmt.Println("WaitingMap after deleting id:", txId)
 }
 
 // TODO implement
 func addToWaitingMap(myId int, waitingForId int) {
 	waitingMap[myId] = waitingForId
+	fmt.Println("WaitingMap after adding id:", myId)
 }
 
 
