@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	// "strings"
+	"sync"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	theValueStore map[string]string
 	// stores txId (key) is waiting for txId (val)
 	waitingMap map[int]int
+	mutex *sync.Mutex
 )
 
 
@@ -101,6 +103,7 @@ func main() {
 	transactions = make(map[int]Transaction)
 	theValueStore = make(map[string]string)
 	waitingMap = make(map[int]int)
+	mutex = &sync.Mutex{}
 
 	printState()
 
@@ -110,10 +113,15 @@ func main() {
 func printState() {
 	fmt.Println("\nKVNODE STATE:")
 	fmt.Println("-TheValueStore:")
+	
+	mutex.Lock()
 	for k := range theValueStore {
 		fmt.Println("    Key:", k, "Value:", theValueStore[k])
 	}
+	mutex.Unlock()
+
 	fmt.Println("-Transactions:")
+	mutex.Lock()
 	for txId := range transactions {
 		tx := transactions[txId]
 		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted)
@@ -123,6 +131,8 @@ func printState() {
 			fmt.Println("      Key:", k, "Value:", tx.PutToDoMap[k])
 		}
 	}
+	fmt.Println("Total number of transactions is:", len(transactions))
+	mutex.Unlock()
 }
 
 func getKeySetSlice(tx Transaction) (keySetString []string) {
@@ -364,7 +374,9 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	tID := nextTransactionId
 	nextTransactionId++
 	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false}
+	mutex.Lock()
 	transactions[tID] = tx
+	mutex.Unlock()
 	*resp = NewTransactionResp{tID}
 	printState()
 	return nil
