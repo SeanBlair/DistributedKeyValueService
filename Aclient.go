@@ -13,8 +13,10 @@ package main
 // this client.go file
 import "./kvservice"
 
-import "fmt"
-
+import (
+	"fmt"
+	"time"
+)
 func main() {
 	var nodes []string
 	nodes = append(nodes, "localhost:2222")
@@ -26,17 +28,35 @@ func main() {
 	t, err := c.NewTX()
 	fmt.Printf("NewTX returned: %v, %v\n", t, err)
 
-	success, err := t.Put("hello", "world")
+	success, err := t.Put("A", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, err = t.Put("goodbye", "world")
+	success, err = t.Put("Z", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, v, err := t.Get("hello")
-	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+	// success, v, err := t.Get("hello")
+	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+
+	time.Sleep(time.Second * 10)
+
+
+	success, err = t.Put("C", "Aclient")
+	fmt.Printf("Put returned: %v, %v\n", success, err)
+
 
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+
+	// t.Abort()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	// fmt.Println("Successfully aborted!!!! :))")
+
+	// success, err = t.Put("goodbye", "oooooooooo")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	// success, err = t.Put("hello", "lkjsdglkj")
+	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+
 
 	c.Close()
 }

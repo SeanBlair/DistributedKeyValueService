@@ -187,7 +187,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 				// TODO lock this data structure
 				addToWaitingMap(req.TxID, trId)
 			}
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * 10)
 			// Other transaction aborted me
 			if transactions[req.TxID].IsAborted {
 				removeFromWaitingMap(req.TxID)
