@@ -88,6 +88,18 @@ type PutResponse struct {
 	Err error 
 }
 
+
+type GetRequest struct {
+	TxID int
+	Key Key 
+}
+
+type GetResponse struct {
+	Success bool
+	Value Value 
+	Err error 
+}
+
 ///////////////////////////////////////
 
 
@@ -157,8 +169,15 @@ type mytx struct {
 // Retrieves a value v associated with a key k.
 func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 	fmt.Printf("Get\n")
-	// TODO
-	return true, "hello", nil
+	req := GetRequest{t.ID, k}
+	var resp GetResponse
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in Get()", err, true)
+	err = client.Call("KVServer.Get", req, &resp)
+	checkError("client.Call(KVServer.Get) Get(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in Get(): ", err, true)
+	return resp.Success, resp.Value, resp.Err
 }
 
 // Associates a value v with a key k.

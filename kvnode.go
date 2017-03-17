@@ -36,6 +36,12 @@ type Transaction struct {
 	IsCommited bool
 }
 
+// Represents a key in the system.
+type Key string
+
+// Represent a value in the system.
+type Value string
+
 type KVServer int
 
 type NewTransactionResp struct {
@@ -50,6 +56,17 @@ type PutRequest struct {
 
 type PutResponse struct {
 	Success bool
+	Err error 
+}
+
+type GetRequest struct {
+	TxID int
+	Key Key
+}
+
+type GetResponse struct {
+	Success bool
+	Value Value
 	Err error 
 }
 
@@ -84,7 +101,7 @@ func printState() {
 		tx := transactions[txId]
 		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited:", tx.IsCommited)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
-		fmt.Println("    PutList:")
+		fmt.Println("    PutToDoMap:")
 		for k := range tx.PutToDoMap {
 			fmt.Println("      Key:", k, "Value:", tx.PutToDoMap[k])
 		}
@@ -97,6 +114,59 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 		keySetString = append(keySetString, key)
 	}
 	return
+}
+
+func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
+	fmt.Println("\nReceived a call to Get()")
+	var returnVal Value 
+	if transactions[req.TxID].IsAborted {
+		
+		*resp = GetResponse{false, returnVal, errors.New("Transaction is already aborted")}
+	} else if transactions[req.TxID].IsCommited {
+		*resp = GetResponse{false, returnVal, errors.New("Transaction is already commited")}
+	} else {
+		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
+		for  !canAccess {
+			var ids []int
+			if isDeadlock(req.TxID, trId, &ids)  {
+				isAbort := resolveDeadLock(req.TxID, ids)
+				if isAbort {
+					removeFromWaitingMap(req.TxID)
+					*resp = GetResponse{false, returnVal, errors.New("Transaction is aborted")}
+					return nil 
+				}	 	
+			} else {
+				// TODO lock this data structure
+				// and take self out when not waiting.
+				addToWaitingMap(req.TxID, trId)
+			}
+			time.Sleep(time.Millisecond * 100)
+			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
+		}
+		removeFromWaitingMap(req.TxID)
+		updateKeySet(req.TxID, string(req.Key))
+
+		returnVal = getValue(req.TxID, string(req.Key))
+		*resp = GetResponse{true,  returnVal, nil}
+	}
+	printState()
+	return nil
+}
+
+// Return value for key, either from transaction PutToDoMap
+// or from theValueStore map. Should only ever be called by
+// transaction that has id == tid
+func getValue(tid int, key string) Value {
+	val, ok := transactions[tid].PutToDoMap[key]
+	if ok {
+		return Value(val)
+	} else {
+		return Value(theValueStore[key])
+	}
+}
+
+func updateKeySet(tid int, key string) {
+	transactions[tid].KeySet[key] = true
 }
 
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
@@ -209,10 +279,8 @@ func canAccessKey(key string, myId int) (bool, int) {
 }
 
 func setPutTransactionRecord(req PutRequest) {
-	tx := transactions[req.TxID]
-	tx.PutToDoMap[req.Key] = req.Value 
-	tx.KeySet[req.Key] = true
-	transactions[req.TxID] = tx
+	transactions[req.TxID].PutToDoMap[req.Key] = req.Value
+	transactions[req.TxID].KeySet[req.Key] = true
 }
 
 func isKeyInStore(k string) bool {
