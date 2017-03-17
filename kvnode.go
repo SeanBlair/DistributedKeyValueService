@@ -8,7 +8,7 @@ import (
 	"net/rpc"
 	"time"
 	// "net/url"
-	"errors"
+	// "errors"
 	"os"
 	"strconv"
 	// "strings"
@@ -58,7 +58,7 @@ type PutRequest struct {
 
 type PutResponse struct {
 	Success bool
-	Err error 
+	Err string
 }
 
 type GetRequest struct {
@@ -69,7 +69,7 @@ type GetRequest struct {
 type GetResponse struct {
 	Success bool
 	Value Value
-	Err error 
+	Err string
 }
 
 type CommitRequest struct {
@@ -79,7 +79,7 @@ type CommitRequest struct {
 type CommitResponse struct {
 	Success bool
 	CommitId int
-	Err error
+	Err string
 }
 
 type AbortRequest struct {
@@ -144,9 +144,9 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 	tx := transactions[req.TxID]
 	if tx.IsAborted {
-		*resp = CommitResponse{false, 0, errors.New("Transaction is already aborted")}
+		*resp = CommitResponse{false, 0, "Transaction is already aborted"}
 	} else if tx.IsCommitted {
-		*resp = CommitResponse{false, 0, errors.New("Transaction is already commited")}
+		*resp = CommitResponse{false, 0, "Transaction is already commited"}
 	} else {
 		// TODO lock???
 		toDo := tx.PutToDoMap
@@ -157,7 +157,7 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 		tx.KeySet = make(map[string]bool)
 		tx.IsCommitted = true
 		transactions[req.TxID] = tx
-		*resp = CommitResponse{true, nextGlobalCommitId, nil}
+		*resp = CommitResponse{true, nextGlobalCommitId, ""}
 		nextGlobalCommitId++
 	}
 	printState()
@@ -168,10 +168,9 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 	fmt.Println("\nReceived a call to Get()")
 	var returnVal Value 
 	if transactions[req.TxID].IsAborted {
-		
-		*resp = GetResponse{false, returnVal, errors.New("Transaction is already aborted")}
+		*resp = GetResponse{false, returnVal, "Transaction is already aborted"}
 	} else if transactions[req.TxID].IsCommitted {
-		*resp = GetResponse{false, returnVal, errors.New("Transaction is already commited")}
+		*resp = GetResponse{false, returnVal, "Transaction is already committed"}
 	} else {
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
 		for  !canAccess {
@@ -180,7 +179,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 				isAbort := resolveDeadLock(req.TxID, ids)
 				if isAbort {
 					removeFromWaitingMap(req.TxID)
-					*resp = GetResponse{false, returnVal, errors.New("Transaction is aborted")}
+					*resp = GetResponse{false, returnVal, "Transaction is aborted"}
 					return nil 
 				}	 	
 			} else {
@@ -195,8 +194,9 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 		updateKeySet(req.TxID, string(req.Key))
 
 		returnVal = getValue(req.TxID, string(req.Key))
-		*resp = GetResponse{true,  returnVal, nil}
+		*resp = GetResponse{true,  returnVal, ""}
 	}
+
 	printState()
 	return nil
 }
@@ -221,9 +221,10 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	fmt.Println("\nReceived a call to Put()")
 
 	if transactions[req.TxID].IsAborted {
-		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
+		// *resp = PutResponse{false, errors.New("Transaction is already aborted")}
+		*resp = PutResponse{false, "Transaction is already aborted"}
 	} else if transactions[req.TxID].IsCommitted {
-		*resp = PutResponse{false, errors.New("Transaction is already commited")}
+		*resp = PutResponse{false, "Transaction is already commited"}
 	} else {
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
 		for  !canAccess {
@@ -232,7 +233,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				isAbort := resolveDeadLock(req.TxID, ids)
 				if isAbort {
 					removeFromWaitingMap(req.TxID)
-					*resp = PutResponse{false, errors.New("Transaction is aborted")}
+					*resp = PutResponse{false, "Transaction is aborted"}
 					return nil 
 				}	 	
 			} else {
@@ -245,7 +246,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		}
 		removeFromWaitingMap(req.TxID)
 		setPutTransactionRecord(req)
-		*resp = PutResponse{true, nil}
+		*resp = PutResponse{true, ""}
 	}
 	printState()
 	return nil
@@ -358,7 +359,7 @@ func listenClients() {
 	for {
 		conn, err := l.Accept()
 		checkError("Error in listenClients(), l.Accept()", err, true)
-		kvServer.ServeConn(conn)
+		go kvServer.ServeConn(conn)
 	}
 }
 

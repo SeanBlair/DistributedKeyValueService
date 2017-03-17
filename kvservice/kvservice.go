@@ -13,6 +13,7 @@ import (
 	"net/rpc"
 	"log"
 	"os"
+	"errors"
 	)
 
 // Represents a key in the system.
@@ -85,7 +86,8 @@ type PutRequest struct {
 
 type PutResponse struct {
 	Success bool
-	Err error 
+	// Err error 
+	Err string
 }
 
 
@@ -97,7 +99,8 @@ type GetRequest struct {
 type GetResponse struct {
 	Success bool
 	Value Value 
-	Err error 
+	// Err error 
+	Err string
 }
 
 type CommitRequest struct {
@@ -107,7 +110,7 @@ type CommitRequest struct {
 type CommitResponse struct {
 	Success bool
 	CommitId int
-	Err error
+	Err string
 }
 
 type AbortRequest struct {
@@ -191,7 +194,8 @@ func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 	checkError("client.Call(KVServer.Get) Get(): ", err, true)
 	err = client.Close()
 	checkError("client.Close() in Get(): ", err, true)
-	return resp.Success, resp.Value, resp.Err
+	// err = errors.New(resp.Err)
+	return resp.Success, resp.Value, errors.New(resp.Err) 
 }
 
 // Associates a value v with a key k.
@@ -211,7 +215,7 @@ func callPutRPC(transactionId int, key Key, value Value) (bool, error) {
 	checkError("client.Call(KVServer.Put) in callPutRPC(): ", err, true)
 	err = client.Close()
 	checkError("client.Close() in callPutRPC(): ", err, true)
-	return resp.Success, resp.Err
+	return resp.Success, errors.New(resp.Err)
 }
 
 // Commits the transaction.
@@ -225,7 +229,7 @@ func (t *mytx) Commit() (success bool, txID int, err error) {
 	checkError("client.Call(KVServer.Commit) Commit(): ", err, true)
 	err = client.Close()
 	checkError("client.Close() in Commit(): ", err, true)
-	return resp.Success, resp.CommitId, resp.Err
+	return resp.Success, resp.CommitId, errors.New(resp.Err)
 }
 
 // Aborts the transaction.
