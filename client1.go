@@ -32,14 +32,6 @@ func main() {
 	success, err = t.Put("goodbye", "world")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// tB, err := c.NewTX()
-	// fmt.Printf("NewTX returned: %v, %v\n", t, err)
-	
-	// success, err = tB.Put("hell", "or high water")
-	// fmt.Printf("Put returned: %v, %v\n", success, err)
-
-
-
 	success, v, err := t.Get("hello")
 	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 

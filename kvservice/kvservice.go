@@ -99,7 +99,8 @@ type PutResponse struct {
 // only way to create a new connection. Takes a set of k-v service
 // node ip:port strings.
 func NewConnection(nodes []string) connection {
-	fmt.Printf("NewConnection with nodes:\n", nodes)
+	// fmt.Printf("NewConnection with nodes:\n", nodes)
+	fmt.Println("Received call to NewConnection() with nodes:", nodes)
 
 	kvNodesIpPorts = nodes
 	c := new(myconn)

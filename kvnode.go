@@ -22,6 +22,8 @@ var (
 	transactions map[int]Transaction
 	nextTransactionId int
 	theValueStore map[string]string
+	// stores txId (key) is waiting for txId (val)
+	waitingMap map[int]int
 )
 
 
@@ -64,6 +66,7 @@ func main() {
 	nextTransactionId = 1
 	transactions = make(map[int]Transaction)
 	theValueStore = make(map[string]string)
+	waitingMap = make(map[int]int)
 
 	printState()
 
@@ -106,15 +109,16 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	} else {
 		canAccess, trId := canAccessKey(req.Key, req.TxID)
 		for  !canAccess {
-			if isDeadlock(req.TxID, trId) {
-				isAbort := resolveDeadLock(req.TxID, trId)
+			var ids []int
+			if isDeadlock(req.TxID, trId, &ids)  {
+				isAbort := resolveDeadLock(req.TxID, ids)
 				if isAbort {
-					abort(req.TxID)
+					removeFromWaitingMap(req.TxID)
 					*resp = PutResponse{false, errors.New("Transaction is aborted")}
 					return nil 
 				}	 	
 			} else {
-				// lock this data structure
+				// TODO lock this data structure
 				// and take self out when not waiting.
 				addToWaitingMap(req.TxID, trId)
 			}
@@ -131,10 +135,12 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 
 // TODO implement
 func removeFromWaitingMap(txId int) {
+	delete(waitingMap, txId)
 }
 
 // TODO implement
 func addToWaitingMap(myId int, waitingForId int) {
+	waitingMap[myId] = waitingForId
 }
 
 // TODO remove from waitingMap
@@ -146,23 +152,44 @@ func abort(txId int) {
 }
 
 
-// returns true if myId should abort, otherwise couses otherId to abort
-func resolveDeadLock(myId int, otherId int) bool {
-	myKeySet := transactions[myId].KeySet
-	otherKeySet := transactions[otherId].KeySet
-	if len(myKeySet) >= len(otherKeySet) {
-		abort(otherId)
-		return true
-	} else {
-		abort(myId)
-		return false
-	}
+// returns true if myId aborted, returns false if otherId aborted
+func resolveDeadLock(myId int, otherIds []int) (isAbort bool) {
+	isAbort = true
+	txWithMinKeySet := myId
+	keySet := transactions[myId].KeySet
+	minKeys := len(keySet)
+	for _, id := range otherIds {
+		keySet = transactions[id].KeySet
+		if len(keySet) < minKeys {
+			minKeys = len(keySet)
+			txWithMinKeySet = id
+			isAbort = false
+		}
+	} 
+	abort(txWithMinKeySet)
+	return
 }
 
-// TODO
-func isDeadlock(myId int, otherId int) bool {
+// TODO Lock??
+// Returns true if otherId is waiting for myId
+func isDeadlock(myId int, otherId int, idsInDeadLock *[]int) bool {
+	_, ok := waitingMap[otherId]
+	// otherId not in map therefore not waiting for myId
+	if !ok {
+		return false
+	} else {
+		*idsInDeadLock = append(*idsInDeadLock, otherId)
+		// waiting for me (deadLock!)
+		if waitingMap[otherId] == myId {
+			return true
+		} else {
+			// check if tx otherId is waiting for is waiting for myId
+			return isDeadlock(myId, waitingMap[otherId], idsInDeadLock)
+		}
+	}
 	return false
 }
+
 
 func canAccessKey(key string, myId int) (bool, int) {
 	tx := transactions[myId]
