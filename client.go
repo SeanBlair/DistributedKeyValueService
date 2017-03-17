@@ -38,5 +38,10 @@ func main() {
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
 
+	// t.Abort()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	fmt.Println("Successfully aborted!!!! :))")
+
+	
 	c.Close()
 }

@@ -74,13 +74,13 @@ var (
 type KVServer int
 
 type NewTransactionResp struct {
-	ID int
+	TxID int
 }
 
 type PutRequest struct {
 	TxID int
-	Key string
-	Value string
+	Key Key
+	Value Value
 }
 
 type PutResponse struct {
@@ -91,13 +91,27 @@ type PutResponse struct {
 
 type GetRequest struct {
 	TxID int
-	Key Key 
+	Key Key
 }
 
 type GetResponse struct {
 	Success bool
 	Value Value 
 	Err error 
+}
+
+type CommitRequest struct {
+	TxID int
+}
+
+type CommitResponse struct {
+	Success bool
+	CommitId int
+	Err error
+}
+
+type AbortRequest struct {
+	TxID int
 }
 
 ///////////////////////////////////////
@@ -145,7 +159,7 @@ func getNewTXID() int {
 	checkError("client.Call(KVServer.NewTransaction) in getNewTXID(): ", err, true)
 	err = client.Close()
 	checkError("client.Close() in getNewTXID(): ", err, true)
-	return resp.ID
+	return resp.TxID
 }
 
 // Close the connection.
@@ -184,11 +198,11 @@ func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 func (t *mytx) Put(k Key, v Value) (success bool, err error) {
 	fmt.Printf("Put\n")
 	// TODO
-	success, err = callPutRPC(t.ID, string(k), string(v))
+	success, err = callPutRPC(t.ID, k, v)
 	return
 }
 
-func callPutRPC(transactionId int, key string, value string) (bool, error) {
+func callPutRPC(transactionId int, key Key, value Value) (bool, error) {
 	req := PutRequest{transactionId, key, value}
 	var resp PutResponse
 	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
@@ -203,14 +217,28 @@ func callPutRPC(transactionId int, key string, value string) (bool, error) {
 // Commits the transaction.
 func (t *mytx) Commit() (success bool, txID int, err error) {
 	fmt.Printf("Commit\n")
-	// TODO
-	return true, 0, nil
+	req := CommitRequest{t.ID}
+	var resp CommitResponse
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in Commit()", err, true)
+	err = client.Call("KVServer.Commit", req, &resp)
+	checkError("client.Call(KVServer.Commit) Commit(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in Commit(): ", err, true)
+	return resp.Success, resp.CommitId, resp.Err
 }
 
 // Aborts the transaction.
 func (t *mytx) Abort() {
 	fmt.Printf("Abort\n")
-	// TODO
+	req := AbortRequest{t.ID}
+	var resp bool
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in Abort()", err, true)
+	err = client.Call("KVServer.Abort", req, &resp)
+	checkError("client.Call(KVServer.Abort) Abort(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in Abort(): ", err, true)
 }
 
 // /Transaction interface

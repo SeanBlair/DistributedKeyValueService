@@ -21,6 +21,7 @@ var (
 	listenClientIpPort string
 	transactions map[int]Transaction
 	nextTransactionId int
+	nextGlobalCommitId int
 	theValueStore map[string]string
 	// stores txId (key) is waiting for txId (val)
 	waitingMap map[int]int
@@ -33,7 +34,7 @@ type Transaction struct {
 	PutToDoMap map[string]string 
 	KeySet map[string]bool
 	IsAborted bool
-	IsCommited bool
+	IsCommitted bool
 }
 
 // Represents a key in the system.
@@ -45,14 +46,15 @@ type Value string
 type KVServer int
 
 type NewTransactionResp struct {
-	ID int
+	TxID int
 }
 
 type PutRequest struct {
 	TxID int
-	Key string
-	Value string
+	Key Key
+	Value Value
 }
+
 
 type PutResponse struct {
 	Success bool
@@ -70,6 +72,20 @@ type GetResponse struct {
 	Err error 
 }
 
+type CommitRequest struct {
+	TxID int
+}
+
+type CommitResponse struct {
+	Success bool
+	CommitId int
+	Err error
+}
+
+type AbortRequest struct {
+	TxID int
+}
+
 func main() {
 	err := ParseArguments()
 	if err != nil {
@@ -81,6 +97,7 @@ func main() {
 	fmt.Println("KVNode with id:", nodeID, "is Alive!!")
 
 	nextTransactionId = 1
+	nextGlobalCommitId = 1
 	transactions = make(map[int]Transaction)
 	theValueStore = make(map[string]string)
 	waitingMap = make(map[int]int)
@@ -99,7 +116,7 @@ func printState() {
 	fmt.Println("-Transactions:")
 	for txId := range transactions {
 		tx := transactions[txId]
-		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommited:", tx.IsCommited)
+		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutToDoMap:")
 		for k := range tx.PutToDoMap {
@@ -116,13 +133,44 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 	return
 }
 
+func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
+	abort(req.TxID)
+	removeFromWaitingMap(req.TxID)
+	*resp = true
+	printState()
+	return nil
+}
+
+func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
+	tx := transactions[req.TxID]
+	if tx.IsAborted {
+		*resp = CommitResponse{false, 0, errors.New("Transaction is already aborted")}
+	} else if tx.IsCommitted {
+		*resp = CommitResponse{false, 0, errors.New("Transaction is already commited")}
+	} else {
+		// TODO lock???
+		toDo := tx.PutToDoMap
+		for k := range toDo {
+			theValueStore[k] = toDo[k]
+		}
+		tx.PutToDoMap = make(map[string]string)
+		tx.KeySet = make(map[string]bool)
+		tx.IsCommitted = true
+		transactions[req.TxID] = tx
+		*resp = CommitResponse{true, nextGlobalCommitId, nil}
+		nextGlobalCommitId++
+	}
+	printState()
+	return nil
+}
+
 func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 	fmt.Println("\nReceived a call to Get()")
 	var returnVal Value 
 	if transactions[req.TxID].IsAborted {
 		
 		*resp = GetResponse{false, returnVal, errors.New("Transaction is already aborted")}
-	} else if transactions[req.TxID].IsCommited {
+	} else if transactions[req.TxID].IsCommitted {
 		*resp = GetResponse{false, returnVal, errors.New("Transaction is already commited")}
 	} else {
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
@@ -174,10 +222,10 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 
 	if transactions[req.TxID].IsAborted {
 		*resp = PutResponse{false, errors.New("Transaction is already aborted")}
-	} else if transactions[req.TxID].IsCommited {
+	} else if transactions[req.TxID].IsCommitted {
 		*resp = PutResponse{false, errors.New("Transaction is already commited")}
 	} else {
-		canAccess, trId := canAccessKey(req.Key, req.TxID)
+		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
 		for  !canAccess {
 			var ids []int
 			if isDeadlock(req.TxID, trId, &ids)  {
@@ -193,7 +241,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				addToWaitingMap(req.TxID, trId)
 			}
 			time.Sleep(time.Millisecond * 100)
-			canAccess, trId = canAccessKey(req.Key, req.TxID)
+			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
 		}
 		removeFromWaitingMap(req.TxID)
 		setPutTransactionRecord(req)
@@ -213,11 +261,12 @@ func addToWaitingMap(myId int, waitingForId int) {
 	waitingMap[myId] = waitingForId
 }
 
-// TODO remove from waitingMap
-// TODO remove KeySet??
+
 func abort(txId int) {
 	tx := transactions[txId]
 	tx.IsAborted = true
+	tx.PutToDoMap = make(map[string]string)
+	tx.KeySet = make(map[string]bool)
 	transactions[txId] = tx
 }
 
@@ -270,7 +319,7 @@ func canAccessKey(key string, myId int) (bool, int) {
 		for k := range transactions {
 			tr:= transactions[k]
 			_, ok = tr.KeySet[key]
-			if ok && !tr.IsAborted && !tr.IsCommited {
+			if ok && !tr.IsAborted && !tr.IsCommitted {
 				return false, tr.ID	
 			}
 		}
@@ -279,8 +328,8 @@ func canAccessKey(key string, myId int) (bool, int) {
 }
 
 func setPutTransactionRecord(req PutRequest) {
-	transactions[req.TxID].PutToDoMap[req.Key] = req.Value
-	transactions[req.TxID].KeySet[req.Key] = true
+	transactions[req.TxID].PutToDoMap[string(req.Key)] = string(req.Value)
+	transactions[req.TxID].KeySet[string(req.Key)] = true
 }
 
 func isKeyInStore(k string) bool {
