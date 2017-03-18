@@ -152,21 +152,28 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 }
 
 func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
+	mutex.Lock()
 	tx := transactions[req.TxID]
+	mutex.Unlock()
 	if tx.IsAborted {
 		*resp = CommitResponse{false, 0, "Transaction is already aborted"}
 	} else if tx.IsCommitted {
 		*resp = CommitResponse{false, 0, "Transaction is already commited"}
 	} else {
-		// TODO lock???
 		toDo := tx.PutToDoMap
+
+		mutex.Lock()
 		for k := range toDo {
 			theValueStore[k] = toDo[k]
 		}
+		mutex.Unlock()
+
 		tx.PutToDoMap = make(map[string]string)
 		tx.KeySet = make(map[string]bool)
 		tx.IsCommitted = true
+		mutex.Lock()
 		transactions[req.TxID] = tx
+		mutex.Unlock()
 		*resp = CommitResponse{true, nextGlobalCommitId, ""}
 		nextGlobalCommitId++
 	}
@@ -176,10 +183,13 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 
 func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 	fmt.Println("\nReceived a call to Get()")
+	mutex.Lock()
+	tx := transactions[req.TxID]
+	mutex.Unlock()
 	var returnVal Value 
-	if transactions[req.TxID].IsAborted {
+	if tx.IsAborted {
 		*resp = GetResponse{false, returnVal, "Transaction is already aborted"}
-	} else if transactions[req.TxID].IsCommitted {
+	} else if tx.IsCommitted {
 		*resp = GetResponse{false, returnVal, "Transaction is already committed"}
 	} else {
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
@@ -194,12 +204,14 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 					return nil 
 				}	 	
 			} else {
-				// TODO lock this data structure
 				addToWaitingMap(req.TxID, trId)
 			}
 			time.Sleep(time.Millisecond * 10)
 			// Other transaction aborted me
-			if transactions[req.TxID].IsAborted {
+			mutex.Lock()
+			imAborted := transactions[req.TxID].IsAborted
+			mutex.Unlock()
+			if imAborted {
 				removeFromWaitingMap(req.TxID)
 				*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 				printState()
@@ -222,23 +234,33 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 // or from theValueStore map. Should only ever be called by
 // transaction that has id == tid
 func getValue(tid int, key string) Value {
+	mutex.Lock()
 	val, ok := transactions[tid].PutToDoMap[key]
+	mutex.Unlock()
 	if ok {
 		return Value(val)
 	} else {
-		return Value(theValueStore[key])
+		mutex.Lock()
+		v := theValueStore[key]
+		mutex.Unlock()
+		return Value(v)
 	}
 }
 
 func updateKeySet(tid int, key string) {
+	mutex.Lock()
 	transactions[tid].KeySet[key] = true
+	mutex.Unlock()
 }
 
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	fmt.Println("\nReceived a call to Put()")
-	if transactions[req.TxID].IsAborted {
+	mutex.Lock()
+	tx := transactions[req.TxID]
+	mutex.Unlock()
+	if tx.IsAborted {
 		*resp = PutResponse{false, "Transaction is already aborted"}
-	} else if transactions[req.TxID].IsCommitted {
+	} else if tx.IsCommitted {
 		*resp = PutResponse{false, "Transaction is already commited"}
 	} else {
 		// true if no transaction owns req.Key
@@ -258,12 +280,14 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 					return nil 
 				}	 	
 			} else {
-				// TODO lock this data structure??
 				addToWaitingMap(req.TxID, trId)
 			}
 			time.Sleep(time.Millisecond * 100)
 			// Other transaction aborted me
-			if transactions[req.TxID].IsAborted {
+			mutex.Lock()
+			imAborted := transactions[req.TxID].IsAborted
+			mutex.Unlock()
+			if imAborted {
 				removeFromWaitingMap(req.TxID)
 				*resp = PutResponse{false, "Transaction was aborted"}
 				printState()
@@ -283,23 +307,29 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 
 // TODO implement
 func removeFromWaitingMap(txId int) {
+	mutex.Lock()
 	delete(waitingMap, txId)
+	mutex.Unlock()
 	fmt.Println("WaitingMap after deleting id:", txId)
 }
 
 // TODO implement
 func addToWaitingMap(myId int, waitingForId int) {
+	mutex.Lock()
 	waitingMap[myId] = waitingForId
+	mutex.Unlock()
 	fmt.Println("WaitingMap after adding id:", myId)
 }
 
 
 func abort(txId int) {
+	mutex.Lock()
 	tx := transactions[txId]
 	tx.IsAborted = true
 	tx.PutToDoMap = make(map[string]string)
 	tx.KeySet = make(map[string]bool)
 	transactions[txId] = tx
+	mutex.Unlock()
 }
 
 
@@ -307,10 +337,14 @@ func abort(txId int) {
 func resolveDeadLock(myId int, otherIds []int) (isAbort bool) {
 	isAbort = true
 	txWithMinKeySet := myId
+	mutex.Lock()
 	keySet := transactions[myId].KeySet
+	mutex.Unlock()
 	minKeys := len(keySet)
 	for _, id := range otherIds {
+		mutex.Lock()
 		keySet = transactions[id].KeySet
+		mutex.Unlock()
 		if len(keySet) < minKeys {
 			minKeys = len(keySet)
 			txWithMinKeySet = id
@@ -324,14 +358,19 @@ func resolveDeadLock(myId int, otherIds []int) (isAbort bool) {
 // TODO Lock??
 // Returns true if otherId is waiting for myId
 func isDeadlock(myId int, otherId int, idsInDeadLock *[]int) bool {
+	mutex.Lock()
 	_, ok := waitingMap[otherId]
+	mutex.Unlock()
 	// otherId not in map therefore not waiting for myId
 	if !ok {
 		return false
 	} else {
 		*idsInDeadLock = append(*idsInDeadLock, otherId)
 		// waiting for me (deadLock!)
-		if waitingMap[otherId] == myId {
+		mutex.Lock()
+		otherIdsBlocker := waitingMap[otherId]
+		mutex.Unlock()
+		if otherIdsBlocker == myId {
 			return true
 		} else {
 			// check if tx otherId is waiting for is waiting for myId
@@ -343,11 +382,14 @@ func isDeadlock(myId int, otherId int, idsInDeadLock *[]int) bool {
 
 
 func canAccessKey(key string, myId int) (bool, int) {
+	mutex.Lock()
 	tx := transactions[myId]
+	mutex.Unlock()
 	_, ok := tx.KeySet[key] 
 	if ok {
 		return true, 0
 	} else {
+		mutex.Lock()
 		for k := range transactions {
 			tr:= transactions[k]
 			_, ok = tr.KeySet[key]
@@ -355,13 +397,16 @@ func canAccessKey(key string, myId int) (bool, int) {
 				return false, tr.ID	
 			}
 		}
+		mutex.Unlock()
 		return true, 0
 	}
 }
 
 func setPutTransactionRecord(req PutRequest) {
+	mutex.Lock()
 	transactions[req.TxID].PutToDoMap[string(req.Key)] = string(req.Value)
 	transactions[req.TxID].KeySet[string(req.Key)] = true
+	mutex.Unlock()
 }
 
 func isKeyInStore(k string) bool {

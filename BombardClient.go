@@ -30,12 +30,42 @@ func main() {
 	for i := 0; i < 1000; i++ {
 		// go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
-		go hitKvsericeNewTransaction(i)
+		// go hitKvsericeNewTransaction(i)
+		// go hitKvsericeNewTransactionAbort(i)
+		go hitKvsericeNewTransactionCommit(i)
 	}
 
 	// All peers will wait here
 	<-done
 
+}
+
+func hitKvsericeNewTransactionCommit(i int) {
+	c := kvservice.NewConnection(nodes)
+	fmt.Printf("NewConnection returned: %v\n", c)
+
+	t, err := c.NewTX()
+	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+
+	success, txID, err := t.Commit()
+	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+}
+ 
+func hitKvsericeNewTransactionAbort(i int) {
+	c := kvservice.NewConnection(nodes)
+	fmt.Printf("NewConnection returned: %v\n", c)
+
+	t, err := c.NewTX()
+	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+
+	t.Abort()
+	fmt.Println("successfully aborted... :)")
+
+	// success, err := t.Put(kvservice.Key(strconv.Itoa(i)), "Aclient")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	// success, commitId, err := t.Commit()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)
 }
 
 func hitKvsericeNewTransaction(i int) {
