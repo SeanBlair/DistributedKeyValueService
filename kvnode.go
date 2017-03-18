@@ -38,6 +38,7 @@ type Transaction struct {
 	KeySet map[string]bool
 	IsAborted bool
 	IsCommitted bool
+	CommitId int 
 }
 
 // Represents a key in the system.
@@ -125,7 +126,7 @@ func printState() {
 	mutex.Lock()
 	for txId := range transactions {
 		tx := transactions[txId]
-		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted)
+		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted, "CommitId:", tx.CommitId)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutToDoMap:")
 		for k := range tx.PutToDoMap {
@@ -174,6 +175,7 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 		tx.PutToDoMap = make(map[string]string)
 		tx.KeySet = make(map[string]bool)
 		tx.IsCommitted = true
+		tx.CommitId = nextGlobalCommitId
 		mutex.Lock()
 		transactions[req.TxID] = tx
 		mutex.Unlock()
@@ -301,6 +303,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		}
 		// Happy path
 		removeFromWaitingMap(req.TxID)
+		updateKeySet(req.TxID, string(req.Key))
 		setPutTransactionRecord(req)
 		*resp = PutResponse{true, ""}
 	}
@@ -410,7 +413,6 @@ func canAccessKey(key string, myId int) (bool, int) {
 func setPutTransactionRecord(req PutRequest) {
 	mutex.Lock()
 	transactions[req.TxID].PutToDoMap[string(req.Key)] = string(req.Value)
-	transactions[req.TxID].KeySet[string(req.Key)] = true
 	mutex.Unlock()
 }
 
@@ -423,7 +425,7 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	fmt.Println("\nReceived a call to NewTransaction()")
 	tID := nextTransactionId
 	nextTransactionId++
-	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false}
+	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false, 0}
 	mutex.Lock()
 	transactions[tID] = tx
 	mutex.Unlock()
