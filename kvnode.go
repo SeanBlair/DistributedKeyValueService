@@ -27,6 +27,7 @@ var (
 	// stores txId (key) is waiting for txId (val)
 	waitingMap map[int]int
 	mutex *sync.Mutex
+	sleepTime  time.Duration = 100
 )
 
 
@@ -208,7 +209,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 			} else {
 				addToWaitingMap(req.TxID, trId)
 			}
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(time.Millisecond * sleepTime)
 			// Other transaction aborted me
 			mutex.Lock()
 			imAborted := transactions[req.TxID].IsAborted
@@ -284,7 +285,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 			} else {
 				addToWaitingMap(req.TxID, trId)
 			}
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * sleepTime)
 			// Other transaction aborted me
 			mutex.Lock()
 			imAborted := transactions[req.TxID].IsAborted
@@ -327,9 +328,11 @@ func addToWaitingMap(myId int, waitingForId int) {
 func abort(txId int) {
 	mutex.Lock()
 	tx := transactions[txId]
+	mutex.Unlock()
 	tx.IsAborted = true
 	tx.PutToDoMap = make(map[string]string)
 	tx.KeySet = make(map[string]bool)
+	mutex.Lock()
 	transactions[txId] = tx
 	mutex.Unlock()
 }
@@ -391,15 +394,15 @@ func canAccessKey(key string, myId int) (bool, int) {
 	if ok {
 		return true, 0
 	} else {
-		mutex.Lock()
 		for k := range transactions {
+			mutex.Lock()
 			tr:= transactions[k]
+			mutex.Unlock()
 			_, ok = tr.KeySet[key]
 			if ok && !tr.IsAborted && !tr.IsCommitted {
 				return false, tr.ID	
 			}
 		}
-		mutex.Unlock()
 		return true, 0
 	}
 }

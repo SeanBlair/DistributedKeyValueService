@@ -31,25 +31,25 @@ func main() {
 	success, err := t.Put("A", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, err = t.Put("Z", "Aclient")
-	fmt.Printf("Put returned: %v, %v\n", success, err)
+	// success, err = t.Put("Z", "Aclient")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
 	// success, v, err := t.Get("hello")
 	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 5)
 
 
-	success, err = t.Put("C", "Aclient")
-	fmt.Printf("Put returned: %v, %v\n", success, err)
+	// success, err = t.Put("C", "Aclient")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
 
-	success, txID, err := t.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
-
-	// t.Abort()
+	// success, txID, err := t.Commit()
 	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
-	// fmt.Println("Successfully aborted!!!! :))")
+
+	t.Abort()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	fmt.Println("Successfully aborted!!!! :))")
 
 	// success, err = t.Put("goodbye", "oooooooooo")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)

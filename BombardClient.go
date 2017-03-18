@@ -27,9 +27,9 @@ func main() {
 	nodes = append(nodes, "localhost:2222")
 	done := make(chan(int))
 
-	for i := 0; i < 2; i++ {
-		// go hitKvsericeSameKey(i)
-		go hitKvsericeDifferentKey(i)
+	for i := 1; i < 3; i++ {
+		go hitKvsericeSameKey(i)
+		// go hitKvsericeDifferentKey(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
 		// go hitKvsericeNewTransactionCommit(i)
