@@ -13,13 +13,21 @@ import (
 	"strconv"
 	// "strings"
 	"sync"
+	"bufio"
 )
 
 var (
-	nodesFile string
+
+	nodesFilePath string
+	// maps other nodes' ip:ports to their alive status
+	kvnodesMap map[string]bool
+
 	nodeID int
-	listenNodeIpPort string
+
+	// ipPort that other kvnodes use to talk to me
+	myKvnodeIpPort string
 	listenClientIpPort string
+	
 	transactions map[int]Transaction
 	nextTransactionId int
 	nextGlobalCommitId int
@@ -39,6 +47,14 @@ type Transaction struct {
 	IsAborted bool
 	IsCommitted bool
 	CommitId int 
+}
+
+type UpdateStateRequest struct {
+	Transactions map[int]Transaction
+	NextTransactionId int
+	NextGlobalCommitId int
+	TheValueStore map[string]string
+	WaitingMap map[int]int
 }
 
 // Represents a key in the system.
@@ -95,8 +111,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Command line arguments are: nodesFile:", nodesFile, "nodeID:", nodeID, 
-		"listenNodeIpPort", listenNodeIpPort, "listenClientIpPort", listenClientIpPort)
+	fmt.Println("Command line arguments are: nodesFilePath:", nodesFilePath, "nodeID:", nodeID, 
+		"myKvnodeIpPort", myKvnodeIpPort, "listenClientIpPort", listenClientIpPort)
 
 	fmt.Println("KVNode with id:", nodeID, "is Alive!!")
 
@@ -107,10 +123,30 @@ func main() {
 	waitingMap = make(map[int]int)
 	mutex = &sync.Mutex{}
 
+	setKvnodesMap()
+
 	printState()
 
 	listenClients()
 }
+
+func setKvnodesMap() {
+	kvnodesMap = make(map[string]bool)
+	pF, err := os.Open(nodesFilePath)
+	checkError("Error in setKvnodesMap(), os.Open()", err, true)
+	scanner := bufio.NewScanner(pF)
+
+	for scanner.Scan() {
+		ipPort := scanner.Text()
+		if ipPort != myKvnodeIpPort {
+			kvnodesMap[ipPort] = true
+			err := scanner.Err();
+			checkError("Error in setKvnodesMap(), scanner.Err()", err, true)
+		}
+	}
+	fmt.Println("kvnodesMap contains:", kvnodesMap)
+}
+
 
 func printState() {
 	fmt.Println("\nKVNODE STATE:")
@@ -144,6 +180,23 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 	}
 	return
 }
+
+func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
+	mutex.Lock()
+	transactions = req.Transactions
+	nextTransactionId = req.NextTransactionId
+	nextGlobalCommitId = req.NextGlobalCommitId
+	theValueStore = req.TheValueStore
+	waitingMap = req.WaitingMap
+	mutex.Unlock()
+	*resp = true
+	return nil
+}
+
+
+// func broadcastState() {
+// 	for 
+// }
 
 func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 	fmt.Println("\n Received a call to Abort")
@@ -452,10 +505,10 @@ func listenClients() {
 func ParseArguments() (err error) {
 	arguments := os.Args[1:]
 	if len(arguments) == 4 {
-		nodesFile = arguments[0]
+		nodesFilePath = arguments[0]
 		nodeID, err = strconv.Atoi(arguments[1])
 		checkError("Error in ParseArguments(), strconv.Atoi()", err, true)
-		listenNodeIpPort = arguments[2]
+		myKvnodeIpPort = arguments[2]
 		listenClientIpPort = arguments[3]
 	} else {
 		err = fmt.Errorf("Usage: {go run kvnode.go [nodesFile] [nodeID] [listen-node-in IP:port] [listen-client-in IP:port]}")
