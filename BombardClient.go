@@ -27,12 +27,12 @@ func main() {
 	nodes = append(nodes, "localhost:2222")
 	done := make(chan(int))
 
-	for i := 1; i < 3; i++ {
-		go hitKvsericeSameKey(i)
+	for i := 1; i < 11; i++ {
+		// go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
-		// go hitKvsericeNewTransactionCommit(i)
+		go hitKvsericeNewTransactionCommit(i)
 	}
 
 	// All peers will wait here
@@ -42,81 +42,71 @@ func main() {
 
 func hitKvsericeNewTransactionCommit(i int) {
 	c := kvservice.NewConnection(nodes)
-	fmt.Printf("NewConnection returned: %v\n", c)
+	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
 	success, txID, err := t.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	fmt.Println("iteration:", i, "Commit returned:", success, txID, err)
 }
  
 func hitKvsericeNewTransactionAbort(i int) {
 	c := kvservice.NewConnection(nodes)
-	fmt.Printf("NewConnection returned: %v\n", c)
+	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
 	t.Abort()
-	fmt.Println("successfully aborted... :)")
-
-	// success, err := t.Put(kvservice.Key(strconv.Itoa(i)), "Aclient")
-	// fmt.Printf("Put returned: %v, %v\n", success, err)
-
-	// success, commitId, err := t.Commit()
-	// fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)
+	fmt.Println("iteration:", i, "successfully aborted... :)")
 }
 
 func hitKvsericeNewTransaction(i int) {
 	c := kvservice.NewConnection(nodes)
-	fmt.Printf("NewConnection returned: %v\n", c)
+	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t, err)
-
-	// success, err := t.Put(kvservice.Key(strconv.Itoa(i)), "Aclient")
-	// fmt.Printf("Put returned: %v, %v\n", success, err)
-
-	// success, commitId, err := t.Commit()
-	// fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)
+	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 }
 
 
 func hitKvsericeDifferentKey(i int) {
+	iStr := strconv.Itoa(i)
+	val := "Aclient" + iStr
 	c := kvservice.NewConnection(nodes)
-	fmt.Printf("NewConnection returned: %v\n", c)
+	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
-	success, err := t.Put(kvservice.Key(strconv.Itoa(i)), "Aclient")
-	fmt.Printf("Put returned: %v, %v\n", success, err)
+	success, err := t.Put(kvservice.Key(strconv.Itoa(i)), kvservice.Value(val))
+	fmt.Println("iteration:", i, "Put returned:", success, err)
 
 	success, v, err := t.Get(kvservice.Key(strconv.Itoa(i)))
-	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+	fmt.Println("iteration:", i, "Get returned:", success, v, err)
 
 	t.Abort()
-	fmt.Println("successfully aborted... :)")
+	fmt.Println("iteration:", i, "successfully aborted... :)")
 
 	success, commitId, err := t.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)
+	fmt.Println("iteration:", i, "Commit returned:", success, commitId, err)
 }
 
 func hitKvsericeSameKey(i int) {
 	iStr := strconv.Itoa(i)
 	val := "Aclient" + iStr
 	c := kvservice.NewConnection(nodes)
-	fmt.Printf("NewConnection returned: %v\n", c)
+	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t, err)
+	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
 	success, err := t.Put("A", kvservice.Value(val))
-	fmt.Printf("Put returned: %v, %v\n", success, err)
+	fmt.Println("iteration:", i, "Put returned:", success, err)
 
 	time.Sleep(time.Second)
 
 	success, commitId, err := t.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)
+	fmt.Println("iteration:", i, "Commit returned:", success, commitId, err)
 }
