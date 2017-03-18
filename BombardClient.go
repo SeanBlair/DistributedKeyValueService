@@ -27,12 +27,12 @@ func main() {
 	nodes = append(nodes, "localhost:2222")
 	done := make(chan(int))
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 2; i++ {
 		// go hitKvsericeSameKey(i)
-		// go hitKvsericeDifferentKey(i)
+		go hitKvsericeDifferentKey(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
-		go hitKvsericeNewTransactionCommit(i)
+		// go hitKvsericeNewTransactionCommit(i)
 	}
 
 	// All peers will wait here
@@ -92,6 +92,12 @@ func hitKvsericeDifferentKey(i int) {
 
 	success, err := t.Put(kvservice.Key(strconv.Itoa(i)), "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	success, v, err := t.Get(kvservice.Key(strconv.Itoa(i)))
+	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+
+	t.Abort()
+	fmt.Println("successfully aborted... :)")
 
 	success, commitId, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, commitId, err)

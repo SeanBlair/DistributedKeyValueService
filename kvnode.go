@@ -144,6 +144,7 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 }
 
 func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
+	fmt.Println("\n Received a call to Abort")
 	abort(req.TxID)
 	removeFromWaitingMap(req.TxID)
 	*resp = true
@@ -152,6 +153,7 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 }
 
 func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
+	fmt.Println("\n Received a call to Commit")
 	mutex.Lock()
 	tx := transactions[req.TxID]
 	mutex.Unlock()
