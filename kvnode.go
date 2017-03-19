@@ -306,11 +306,16 @@ func shareState(ipPort string) {
 
 func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 	fmt.Println("\n Received a call to Abort")
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking = true
 	abort(req.TxID)
 	removeFromWaitingMap(req.TxID)
 	*resp = true
 	printState()
 	broadcastState()
+	isWorking = false
 	return nil
 }
 
