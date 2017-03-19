@@ -316,6 +316,10 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 
 func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 	fmt.Println("\n Received a call to Commit")
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking = true
 	mutex.Lock()
 	tx := transactions[req.TxID]
 	mutex.Unlock()
@@ -344,6 +348,7 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 	}
 	printState()
 	broadcastState()
+	isWorking = false
 	return nil
 }
 
