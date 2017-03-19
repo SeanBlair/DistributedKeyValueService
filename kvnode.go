@@ -20,7 +20,7 @@ var (
 
 	nodesFilePath string
 	// maps other nodes' ip:ports to their alive status
-	kvnodesMap map[string]bool
+	// kvnodesMap map[string]bool
 
 	nodeID int
 
@@ -36,8 +36,22 @@ var (
 	waitingMap map[int]int
 	mutex *sync.Mutex
 	sleepTime  time.Duration = 100
+
+	isWorking bool
+	isLeader bool
+	kvnodes map[int]KVNode
+	nodeIds []int
+
+	// TODO set this to 4 when turn in code
+	secondsForBootstrap time.Duration = 5
 )
 
+type KVNode struct {
+	ID int
+	IpPort string
+	IsLeader bool
+	IsAlive bool
+}
 
 
 type Transaction struct {
@@ -55,6 +69,7 @@ type UpdateStateRequest struct {
 	NextGlobalCommitId int
 	TheValueStore map[string]string
 	WaitingMap map[int]int
+	KVNodes map[int]KVNode
 }
 
 // Represents a key in the system.
@@ -123,46 +138,123 @@ func main() {
 	waitingMap = make(map[int]int)
 	mutex = &sync.Mutex{}
 
-	setKvnodesMap()
+	kvnodes = make(map[int]KVNode)
+
+	setKvnodesAndNodeIds()
+	isWorking = false
+	isLeader = nodeID == 1
 
 	printState()
 
 	go listenClients()
-	listenKvNodes()
+	go listenKvNodes()
+	time.Sleep(time.Second * secondsForBootstrap)
+	alternateLeader()
 }
 
-func setKvnodesMap() {
-	kvnodesMap = make(map[string]bool)
+func alternateLeader() {
+	for {
+		if isLeader && !isWorking {
+			nextLeader := chooseNextLeader()
+			fmt.Println("The chosen next leader is:", nextLeader)
+			if nextLeader != nodeID {
+				fmt.Println("Releasing Leadership")
+				mutex.Lock()
+				node := kvnodes[nodeID]
+			 	node.IsLeader = false
+			 	kvnodes[nodeID] = node
+			 	isLeader = false
+			 	node = kvnodes[nextLeader] 
+				node.IsLeader = true
+				kvnodes[nextLeader] = node
+				mutex.Unlock()
+				broadcastState()	
+			}
+			time.Sleep(time.Second * 10)
+		}
+	}
+}
+
+func chooseNextLeader() (int) {
+	for myIndex, id := range nodeIds {
+		fmt.Println("myIndex is:", myIndex, "and id is:", id)
+		if id == nodeID {
+			fmt.Println("len(nodeIds):", len(nodeIds))
+			for i := 1; i <= len(nodeIds); i++ {
+				nextIndex := (myIndex + i) % len(nodeIds)
+				fmt.Println("nextIndex is:", nextIndex)
+				nextId := nodeIds[nextIndex]
+				kvnode := kvnodes[nextId]
+				if kvnode.IsAlive {
+					return kvnode.ID
+				}
+			} 
+		}
+	}
+	return nodeID
+}
+
+func setKvnodesAndNodeIds() {
+	kvnodes = make(map[int]KVNode)
 	pF, err := os.Open(nodesFilePath)
 	checkError("Error in setKvnodesMap(), os.Open()", err, true)
 	scanner := bufio.NewScanner(pF)
 
+	id := 1
 	for scanner.Scan() {
 		ipPort := scanner.Text()
-		if ipPort != myKvnodeIpPort {
-			kvnodesMap[ipPort] = true
-			err := scanner.Err();
-			checkError("Error in setKvnodesMap(), scanner.Err()", err, true)
-		}
+		err := scanner.Err();
+		checkError("Error in setKvnodesMap(), scanner.Err()", err, true)
+		kvnodes[id] = KVNode{id, ipPort, id == 1, true}
+		nodeIds = append(nodeIds, id)
+		id++
 	}
-	fmt.Println("kvnodesMap contains:", kvnodesMap)
+	fmt.Println("kvnodes contains:", kvnodes)
+	fmt.Println("nodeIds contains:", nodeIds)
 }
+
+// func setKvnodesMap() {
+// 	kvnodesMap = make(map[string]bool)
+// 	pF, err := os.Open(nodesFilePath)
+// 	checkError("Error in setKvnodesMap(), os.Open()", err, true)
+// 	scanner := bufio.NewScanner(pF)
+
+// 	for scanner.Scan() {
+// 		ipPort := scanner.Text()
+// 		if ipPort != myKvnodeIpPort {
+// 			kvnodesMap[ipPort] = true
+// 			err := scanner.Err();
+// 			checkError("Error in setKvnodesMap(), scanner.Err()", err, true)
+// 		}
+// 	}
+// 	fmt.Println("kvnodesMap contains:", kvnodesMap)
+// }
 
 
 func printState() {
 	fmt.Println("\nKVNODE STATE:")
-	fmt.Println("-TheValueStore:")
-	
-	mutex.Lock()
-	for k := range theValueStore {
-		fmt.Println("    Key:", k, "Value:", theValueStore[k])
+	fmt.Println("-KVNodes:")
+	for id := range kvnodes {
+		mutex.Lock()
+		n := kvnodes[id]
+		mutex.Unlock()
+		fmt.Println("    Id:", n.ID, "IpPort:", n.IpPort, "IsLeader:", n.IsLeader, "IsAlive:", n.IsAlive)
 	}
-	mutex.Unlock()
+
+	fmt.Println("-TheValueStore:")
+	// mutex.Lock()
+	for k := range theValueStore {
+		mutex.Lock()
+		fmt.Println("    Key:", k, "Value:", theValueStore[k])
+		mutex.Unlock()
+	}
+	// mutex.Unlock()
 
 	fmt.Println("-Transactions:")
-	mutex.Lock()
 	for txId := range transactions {
+		mutex.Lock()
 		tx := transactions[txId]
+		mutex.Unlock()
 		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted, "CommitId:", tx.CommitId)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutToDoMap:")
@@ -171,7 +263,6 @@ func printState() {
 		}
 	}
 	fmt.Println("Total number of transactions is:", len(transactions))
-	mutex.Unlock()
 }
 
 func getKeySetSlice(tx Transaction) (keySetString []string) {
@@ -190,6 +281,8 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	nextGlobalCommitId = req.NextGlobalCommitId
 	theValueStore = req.TheValueStore
 	waitingMap = req.WaitingMap
+	kvnodes = req.KVNodes
+	isLeader = kvnodes[nodeID].IsLeader
 	mutex.Unlock()
 	*resp = true
 	printState()
@@ -198,14 +291,19 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 
 
 func broadcastState() {
-	for ipPort := range kvnodesMap {
-		shareState(ipPort)
+	for id := range kvnodes {
+		if id != nodeID {
+			mutex.Lock()
+			node := kvnodes[id]
+			mutex.Unlock()
+			shareState(node.IpPort)	
+		}
 	}
 }
 
 func shareState(ipPort string) {
 	mutex.Lock()
-	req := UpdateStateRequest{transactions, nextTransactionId, nextGlobalCommitId, theValueStore, waitingMap}
+	req := UpdateStateRequest{transactions, nextTransactionId, nextGlobalCommitId, theValueStore, waitingMap, kvnodes}
 	mutex.Unlock()
 	var resp bool
 	client, err := rpc.Dial("tcp", ipPort)
