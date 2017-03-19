@@ -43,7 +43,7 @@ var (
 	nodeIds []int
 
 	// TODO set this to 4 when turn in code
-	secondsForBootstrap time.Duration = 5
+	secondsForBootstrap time.Duration = 10
 )
 
 type KVNode struct {
@@ -143,6 +143,9 @@ func main() {
 	setKvnodesAndNodeIds()
 	isWorking = false
 	isLeader = nodeID == 1
+	if isLeader {
+		fmt.Println("I AM THE LEADER......")
+	}
 
 	printState()
 
@@ -154,35 +157,32 @@ func main() {
 
 func alternateLeader() {
 	for {
+		time.Sleep(time.Second * 4)
 		if isLeader && !isWorking {
 			nextLeader := chooseNextLeader()
-			fmt.Println("The chosen next leader is:", nextLeader)
 			if nextLeader != nodeID {
-				fmt.Println("Releasing Leadership")
+				fmt.Println("\nReleasing Leadership")
 				mutex.Lock()
 				node := kvnodes[nodeID]
 			 	node.IsLeader = false
 			 	kvnodes[nodeID] = node
 			 	isLeader = false
+			 	fmt.Println("\nI AM NOT THE LEADER     :)     :)     :)")
 			 	node = kvnodes[nextLeader] 
 				node.IsLeader = true
 				kvnodes[nextLeader] = node
 				mutex.Unlock()
 				broadcastState()	
 			}
-			time.Sleep(time.Second * 10)
 		}
 	}
 }
 
 func chooseNextLeader() (int) {
 	for myIndex, id := range nodeIds {
-		fmt.Println("myIndex is:", myIndex, "and id is:", id)
 		if id == nodeID {
-			fmt.Println("len(nodeIds):", len(nodeIds))
 			for i := 1; i <= len(nodeIds); i++ {
 				nextIndex := (myIndex + i) % len(nodeIds)
-				fmt.Println("nextIndex is:", nextIndex)
 				nextId := nodeIds[nextIndex]
 				kvnode := kvnodes[nextId]
 				if kvnode.IsAlive {
@@ -212,24 +212,6 @@ func setKvnodesAndNodeIds() {
 	fmt.Println("kvnodes contains:", kvnodes)
 	fmt.Println("nodeIds contains:", nodeIds)
 }
-
-// func setKvnodesMap() {
-// 	kvnodesMap = make(map[string]bool)
-// 	pF, err := os.Open(nodesFilePath)
-// 	checkError("Error in setKvnodesMap(), os.Open()", err, true)
-// 	scanner := bufio.NewScanner(pF)
-
-// 	for scanner.Scan() {
-// 		ipPort := scanner.Text()
-// 		if ipPort != myKvnodeIpPort {
-// 			kvnodesMap[ipPort] = true
-// 			err := scanner.Err();
-// 			checkError("Error in setKvnodesMap(), scanner.Err()", err, true)
-// 		}
-// 	}
-// 	fmt.Println("kvnodesMap contains:", kvnodesMap)
-// }
-
 
 func printState() {
 	fmt.Println("\nKVNODE STATE:")
@@ -286,6 +268,11 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	mutex.Unlock()
 	*resp = true
 	printState()
+	if isLeader {
+		fmt.Println("\nI AM THE LEADER......")
+	} else {
+		fmt.Println("\nI AM NOT THE LEADER    :)    :)    :)")
+	}
 	return nil
 }
 
