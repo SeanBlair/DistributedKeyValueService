@@ -28,11 +28,11 @@ func main() {
 	t, err := c.NewTX()
 	fmt.Printf("NewTX returned: %v, %v\n", t, err)
 
-	// success, err := t.Put("B", "Bclient")
-	// fmt.Printf("Put returned: %v, %v\n", success, err)
+	success, err := t.Put("B", "Bclient")
+	fmt.Printf("Put returned: %v, %v\n", success, err)
 
 
-	success, err := t.Put("A", "Bclient")
+	success, err = t.Put("A", "Bclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
 
