@@ -16,7 +16,7 @@ package main
 import (
 	"fmt"
 	"./kvservice"
-	"time"
+	// "time"
 	"strconv"
 )
 
@@ -28,8 +28,8 @@ func main() {
 	done := make(chan(int))
 
 	for i := 1; i < 11; i++ {
-		go hitKvsericePut(i)
-		// go hitKvsericeSameKey(i)
+		// go hitKvsericePut(i)
+		go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
@@ -110,18 +110,18 @@ func hitKvsericeDifferentKey(i int) {
 }
 
 func hitKvsericeSameKey(i int) {
-	iStr := strconv.Itoa(i)
-	val := "Aclient" + iStr
+	// iStr := strconv.Itoa(i)
+	// val := "Aclient" + iStr
 	c := kvservice.NewConnection(nodes)
 	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
 	t, err := c.NewTX()
 	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
-	success, err := t.Put("A", kvservice.Value(val))
-	fmt.Println("iteration:", i, "Put returned:", success, err)
+	success, v, err := t.Get(kvservice.Key("A"))
+	fmt.Println("iteration:", i, "Get returned:", success, v, err)
 
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
 
 	success, commitId, err := t.Commit()
 	fmt.Println("iteration:", i, "Commit returned:", success, commitId, err)

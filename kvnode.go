@@ -359,6 +359,10 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 
 func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 	fmt.Println("\nReceived a call to Get()")
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking = true
 	mutex.Lock()
 	tx := transactions[req.TxID]
 	mutex.Unlock()
@@ -378,10 +382,13 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 					*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 					printState()
 					broadcastState()
+					isWorking = false
 					return nil 
 				}	 	
 			} else {
 				addToWaitingMap(req.TxID, trId)
+				// Allow leadership to be passed 
+				isWorking = false
 			}
 			time.Sleep(time.Millisecond * sleepTime)
 			// Other transaction aborted me
@@ -393,8 +400,13 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 				*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 				printState()
 				broadcastState()
+				isWorking = false
 				return nil
 			}
+			if !isLeader {
+				becomeLeader()	
+			}
+			isWorking = true
 			// Reset loop guard
 			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
 		}
@@ -406,6 +418,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 	}
 	printState()
 	broadcastState()
+	isWorking = false
 	return nil
 }
 
@@ -467,7 +480,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				}	 	
 			} else {
 				addToWaitingMap(req.TxID, trId)
-				// pass the baton!!!!
+				// Allow leadership to be passed
 				isWorking = false
 			}
 			time.Sleep(time.Millisecond * sleepTime)
