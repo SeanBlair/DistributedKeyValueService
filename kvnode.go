@@ -434,6 +434,10 @@ func updateKeySet(tid int, key string) {
 
 func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	fmt.Println("\nReceived a call to Put()")
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking = true
 	mutex.Lock()
 	tx := transactions[req.TxID]
 	mutex.Unlock()
@@ -445,6 +449,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		// true if no transaction owns req.Key
 		canAccess, trId := canAccessKey(string(req.Key), req.TxID)
 		for  !canAccess {
+
 			fmt.Println("transactionID:", req.TxID , "Can't Access!! Key:", req.Key, "owned by:", trId)
 			var ids []int
 			// There is a cycle starting at trId and ending at me
@@ -457,10 +462,13 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 					*resp = PutResponse{false, "Transaction was aborted"}
 					printState()
 					broadcastState()
+					isWorking = false
 					return nil 
 				}	 	
 			} else {
 				addToWaitingMap(req.TxID, trId)
+				// pass the baton!!!!
+				isWorking = false
 			}
 			time.Sleep(time.Millisecond * sleepTime)
 			// Other transaction aborted me
@@ -472,10 +480,17 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				*resp = PutResponse{false, "Transaction was aborted"}
 				printState()
 				broadcastState()
+				isWorking = false
 				return nil
 			}
+
+			if !isLeader {
+				becomeLeader()	
+			}
+			isWorking = true
 			// Reset loop guard
 			canAccess, trId = canAccessKey(string(req.Key), req.TxID)
+
 		}
 		// Happy path
 		removeFromWaitingMap(req.TxID)
@@ -485,6 +500,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 	}
 	printState()
 	broadcastState()
+	isWorking = false
 	return nil
 }
 
