@@ -157,11 +157,14 @@ func main() {
 
 func alternateLeader() {
 	for {
-		time.Sleep(time.Second * 4)
-		if isLeader && !isWorking {
+		// TODO find out why this avoids crashes while 
+		// if isLeader && !isWorking crashes....
+		canPassLeadership := isLeader && !isWorking
+		if canPassLeadership {
 			nextLeader := chooseNextLeader()
 			if nextLeader != nodeID {
 				fmt.Println("\nReleasing Leadership")
+
 				mutex.Lock()
 				node := kvnodes[nodeID]
 			 	node.IsLeader = false
@@ -172,9 +175,11 @@ func alternateLeader() {
 				node.IsLeader = true
 				kvnodes[nextLeader] = node
 				mutex.Unlock()
+
 				broadcastState()	
 			}
 		}
+		time.Sleep(time.Second * 4)
 	}
 }
 
@@ -184,6 +189,7 @@ func chooseNextLeader() (int) {
 			for i := 1; i <= len(nodeIds); i++ {
 				nextIndex := (myIndex + i) % len(nodeIds)
 				nextId := nodeIds[nextIndex]
+				// TODO lock???
 				kvnode := kvnodes[nextId]
 				if kvnode.IsAlive {
 					return kvnode.ID
@@ -222,16 +228,12 @@ func printState() {
 		mutex.Unlock()
 		fmt.Println("    Id:", n.ID, "IpPort:", n.IpPort, "IsLeader:", n.IsLeader, "IsAlive:", n.IsAlive)
 	}
-
 	fmt.Println("-TheValueStore:")
-	// mutex.Lock()
 	for k := range theValueStore {
 		mutex.Lock()
 		fmt.Println("    Key:", k, "Value:", theValueStore[k])
 		mutex.Unlock()
 	}
-	// mutex.Unlock()
-
 	fmt.Println("-Transactions:")
 	for txId := range transactions {
 		mutex.Lock()
@@ -264,10 +266,12 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	theValueStore = req.TheValueStore
 	waitingMap = req.WaitingMap
 	kvnodes = req.KVNodes
+	mutex.Unlock()
+	mutex.Lock()
 	isLeader = kvnodes[nodeID].IsLeader
 	mutex.Unlock()
 	*resp = true
-	printState()
+	// printState()
 	if isLeader {
 		fmt.Println("\nI AM THE LEADER......")
 	} else {
@@ -588,6 +592,10 @@ func isKeyInStore(k string) bool {
 
 func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	fmt.Println("\nReceived a call to NewTransaction()")
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking =  true
 	tID := nextTransactionId
 	nextTransactionId++
 	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false, 0}
@@ -597,7 +605,15 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	*resp = NewTransactionResp{tID}
 	printState()
 	broadcastState()
+	isWorking = false
 	return nil
+}
+
+func becomeLeader() {
+	for !isLeader {
+		fmt.Println("trying to become a leader....")
+	}
+	return
 }
 
 func listenClients() {
