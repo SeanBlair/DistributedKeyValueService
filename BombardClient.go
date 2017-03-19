@@ -27,12 +27,12 @@ func main() {
 	nodes = append(nodes, "localhost:2222")
 	done := make(chan(int))
 
-	for i := 1; i < 1000; i++ {
-		// go hitKvsericeSameKey(i)
+	for i := 1; i < 11; i++ {
+		go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
-		go hitKvsericeNewTransactionCommit(i)
+		// go hitKvsericeNewTransactionCommit(i)
 	}
 
 	// All peers will wait here

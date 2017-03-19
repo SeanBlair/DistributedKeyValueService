@@ -127,7 +127,8 @@ func main() {
 
 	printState()
 
-	listenClients()
+	go listenClients()
+	listenKvNodes()
 }
 
 func setKvnodesMap() {
@@ -182,6 +183,7 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 }
 
 func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
+	fmt.Println("Received a call to UpdateState()")
 	mutex.Lock()
 	transactions = req.Transactions
 	nextTransactionId = req.NextTransactionId
@@ -190,13 +192,30 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	waitingMap = req.WaitingMap
 	mutex.Unlock()
 	*resp = true
+	printState()
 	return nil
 }
 
 
-// func broadcastState() {
-// 	for 
-// }
+func broadcastState() {
+	for ipPort := range kvnodesMap {
+		shareState(ipPort)
+	}
+}
+
+func shareState(ipPort string) {
+	mutex.Lock()
+	req := UpdateStateRequest{transactions, nextTransactionId, nextGlobalCommitId, theValueStore, waitingMap}
+	mutex.Unlock()
+	var resp bool
+	client, err := rpc.Dial("tcp", ipPort)
+	checkError("rpc.Dial in shareState()", err, true)
+	err = client.Call("KVServer.UpdateState", req, &resp)
+	checkError("Error in shareState(), client.Call(KVServer.UpdateState): ", err, true)
+	err = client.Close()
+	checkError("Error in shareState(), client.Close(): ", err, true)
+}
+
 
 func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 	fmt.Println("\n Received a call to Abort")
@@ -204,6 +223,7 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 	removeFromWaitingMap(req.TxID)
 	*resp = true
 	printState()
+	broadcastState()
 	return nil
 }
 
@@ -236,6 +256,7 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 		nextGlobalCommitId++
 	}
 	printState()
+	broadcastState()
 	return nil
 }
 
@@ -259,6 +280,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 					removeFromWaitingMap(req.TxID)
 					*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 					printState()
+					broadcastState()
 					return nil 
 				}	 	
 			} else {
@@ -273,6 +295,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 				removeFromWaitingMap(req.TxID)
 				*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 				printState()
+				broadcastState()
 				return nil
 			}
 			// Reset loop guard
@@ -285,6 +308,7 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 		*resp = GetResponse{true,  returnVal, ""}
 	}
 	printState()
+	broadcastState()
 	return nil
 }
 
@@ -335,6 +359,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 					removeFromWaitingMap(req.TxID)
 					*resp = PutResponse{false, "Transaction was aborted"}
 					printState()
+					broadcastState()
 					return nil 
 				}	 	
 			} else {
@@ -349,6 +374,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				removeFromWaitingMap(req.TxID)
 				*resp = PutResponse{false, "Transaction was aborted"}
 				printState()
+				broadcastState()
 				return nil
 			}
 			// Reset loop guard
@@ -361,6 +387,7 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 		*resp = PutResponse{true, ""}
 	}
 	printState()
+	broadcastState()
 	return nil
 }
 
@@ -484,6 +511,7 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	mutex.Unlock()
 	*resp = NewTransactionResp{tID}
 	printState()
+	broadcastState()
 	return nil
 }
 
@@ -497,6 +525,20 @@ func listenClients() {
 	for {
 		conn, err := l.Accept()
 		checkError("Error in listenClients(), l.Accept()", err, true)
+		go kvServer.ServeConn(conn)
+	}
+}
+
+func listenKvNodes() {
+	kvServer := rpc.NewServer()
+	kv := new(KVServer)
+	kvServer.Register(kv)
+	l, err := net.Listen("tcp", myKvnodeIpPort)
+	checkError("Error in listenKvNodes(), net.Listen()", err, true)
+	fmt.Println("Listening for kvnode rpc calls on:", myKvnodeIpPort)
+	for {
+		conn, err := l.Accept()
+		checkError("Error in listenKvNodes(), l.Accept()", err, true)
 		go kvServer.ServeConn(conn)
 	}
 }
