@@ -138,8 +138,6 @@ func main() {
 	waitingMap = make(map[int]int)
 	mutex = &sync.Mutex{}
 
-	kvnodes = make(map[int]KVNode)
-
 	setKvnodesAndNodeIds()
 	isWorking = false
 	isLeader = nodeID == 1
