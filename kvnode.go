@@ -11,9 +11,10 @@ import (
 	// "errors"
 	"os"
 	"strconv"
-	// "strings"
+	"strings"
 	"sync"
 	"bufio"
+	"sort"
 )
 
 var (
@@ -27,6 +28,8 @@ var (
 	// ipPort that other kvnodes use to talk to me
 	myKvnodeIpPort string
 	listenClientIpPort string
+
+	nextClientIsAlivePort int
 	
 	transactions map[int]Transaction
 	nextTransactionId int
@@ -79,6 +82,10 @@ type Key string
 type Value string
 
 type KVServer int
+
+type NewConnectionResp struct {
+	IsAlivePort int
+}
 
 type NewTransactionResp struct {
 	TxID int
@@ -145,12 +152,30 @@ func main() {
 		fmt.Println("I AM THE LEADER......")
 	}
 
+	nextClientIsAlivePort = computeClientIsAlivePort()
+	fmt.Println("nextClientIsAlivePort:", nextClientIsAlivePort)
+
 	printState()
 
 	go listenClients()
 	go listenKvNodes()
 	time.Sleep(time.Second * secondsForBootstrap)
 	alternateLeader()
+}
+
+func computeClientIsAlivePort() int {
+	var ports []int
+	listenClientPort := listenClientIpPort[(strings.Index(listenClientIpPort, ":") + 1):]
+	clientPort, err := strconv.Atoi(listenClientPort)
+	checkError("Error in computeClientIsAlivePort(), strconv.Atoi()", err, true)
+	ports = append(ports, clientPort)
+	listenKvNodesPort := myKvnodeIpPort[(strings.Index(myKvnodeIpPort, ":") + 1):]
+	nodesPort, err := strconv.Atoi(listenKvNodesPort)
+	checkError("Error in computeClientIsAlivePort(), strconv.Atoi()", err, true)
+	ports = append(ports, nodesPort)
+	sort.Ints(ports)
+	largest := ports[len(ports) - 1]
+	return largest + 10
 }
 
 func alternateLeader() {
@@ -253,6 +278,47 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 		keySetString = append(keySetString, key)
 	}
 	return
+}
+
+func (p *KVServer) NewConnection(req bool, resp * NewConnectionResp) error {
+	fmt.Println("Received a call to NewConnection()")
+	mutex.Lock()
+	isAlivePort := nextClientIsAlivePort
+	nextClientIsAlivePort++
+	mutex.Unlock()
+	go monitorNewConnection(isAlivePort)
+	*resp = NewConnectionResp{isAlivePort}
+	return nil
+}
+
+func monitorNewConnection(port int) {
+	ip := listenClientIpPort[:strings.Index(listenClientIpPort, ":")]
+	portString := strconv.Itoa(port)
+	ln, err := net.Listen("tcp", ip + ":" + portString)
+	checkError("Error in monitorNewConnection(), net.Listen():", err, true)
+	fmt.Println("listening for connection to monitor on port:", port)
+	conn, err := ln.Accept()
+	fmt.Println("Accepted a connection to monitor on port:", port)
+
+	for {
+		// set timeout
+		conn.SetReadDeadline(time.Now().Add(time.Second * 2))
+		// send ping
+		fmt.Fprintf(conn, "Ping")
+		// listen for pong
+		buffer := make([]byte, 10)
+		n, err := conn.Read(buffer)
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+			fmt.Println("detected a dead client on port:", port)
+			break
+		} else {
+			if err != nil {
+				fmt.Println("detected a dead client on port:", port, "because of err:\n", err)
+				break
+			}
+			fmt.Println("Received message:", string(buffer[0:n]), "on port:", port)
+		}
+	}
 }
 
 func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {

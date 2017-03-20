@@ -14,6 +14,9 @@ import (
 	"log"
 	"os"
 	"errors"
+	"strings"
+	"strconv"
+	"net"
 	)
 
 // Represents a key in the system.
@@ -74,6 +77,10 @@ var (
 
 type KVServer int
 
+type NewConnectionResp struct {
+	IsAlivePort int
+}
+
 type NewTransactionResp struct {
 	TxID int
 }
@@ -130,10 +137,37 @@ type AbortRequest struct {
 func NewConnection(nodes []string) connection {
 	// fmt.Printf("NewConnection with nodes:\n", nodes)
 	fmt.Println("Received call to NewConnection() with nodes:", nodes)
-
 	kvNodesIpPorts = nodes
+
+	req := true
+	var resp NewConnectionResp
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
+	checkError("rpc.Dial in getNewConnection()", err, true)
+	err = client.Call("KVServer.NewConnection", req, &resp)
+	checkError("client.Call(KVServer.NewConnection) in NewConnection(): ", err, true)
+	err = client.Close()
+	checkError("client.Close() in NewConnection(): ", err, true)
+
+	kvNodeIpPort := kvNodesIpPorts[0]
+	kvNodeIp := kvNodeIpPort[:strings.Index(kvNodeIpPort, ":")]
+	isAliveConnectionIpPort := kvNodeIp + ":" + strconv.Itoa(resp.IsAlivePort)
+	startIsAliveConnection(isAliveConnectionIpPort)
+	fmt.Println("IsAlive connection started with kvnode:", kvNodesIpPorts[0], "on ipPort:", isAliveConnectionIpPort)
 	c := new(myconn)
 	return c
+}
+
+func startIsAliveConnection(ipPort string) {
+	conn, err := net.Dial("tcp", ipPort)
+	checkError("Error in startIsAliveConnection(), net.Dial()", err, true)
+	fmt.Println("successfully started an isAlive connection with:", ipPort)
+	for {
+		buffer := make([]byte, 10)
+		n, err := conn.Read(buffer)
+		checkError("Error in startIsAliveConnection, conn.Read()", err, true)
+		fmt.Println("Received message:", string(buffer[0:n]), "from kvnode:", ipPort)
+		fmt.Fprintf(conn, "Pong")
+	}
 }
 
 
