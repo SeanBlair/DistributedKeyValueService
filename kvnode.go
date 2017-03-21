@@ -194,6 +194,7 @@ func alternateLeader() {
 		canPassLeadership := isLeader && !isWorking
 		if canPassLeadership {
 			nextLeader := chooseNextLeader()
+			fmt.Println("NEXT LEADER!!!!!!   IS:", nextLeader)
 			if nextLeader != nodeID {
 				fmt.Println("\nReleasing Leadership")
 
@@ -389,26 +390,59 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 
 func broadcastState() {
 	for id := range kvnodes {
-		if id != nodeID {
-			mutex.Lock()
-			node := kvnodes[id]
-			mutex.Unlock()
-			shareState(node.IpPort)	
+		mutex.Lock()
+		node := kvnodes[id]
+		mutex.Unlock()
+		if id != nodeID && node.IsAlive == true {
+			err := shareState(node.IpPort)
+			if err != nil {
+				fixDeadKvNode(id)
+				broadcastState()
+				printState()
+				break
+			}	
 		}
 	}
 }
 
-func shareState(ipPort string) {
+func fixDeadKvNode(id int) {
+	mutex.Lock()
+	n := kvnodes[id]
+	n.IsAlive = false
+	kvnodes[id] = n
+	mutex.Unlock()
+	mutex.Lock()
+	txs := transactions
+	mutex.Unlock()
+	for k := range txs {
+		t := txs[k]
+		if t.KVNodeID == id && t.IsCommitted == false && t.IsAborted == false {
+			abort(k)
+		}
+	}
+}
+
+func shareState(ipPort string) error {
 	mutex.Lock()
 	req := UpdateStateRequest{transactions, nextTransactionId, nextGlobalCommitId, theValueStore, waitingMap, kvnodes}
 	mutex.Unlock()
 	var resp bool
 	client, err := rpc.Dial("tcp", ipPort)
-	checkError("rpc.Dial in shareState()", err, true)
+	checkError("rpc.Dial in shareState()", err, false)
+	if err != nil {
+		return err
+	}
 	err = client.Call("KVServer.UpdateState", req, &resp)
-	checkError("Error in shareState(), client.Call(KVServer.UpdateState): ", err, true)
+	checkError("Error in shareState(), client.Call(KVServer.UpdateState): ", err, false)
+	if err != nil {
+		return err
+	}
 	err = client.Close()
-	checkError("Error in shareState(), client.Close(): ", err, true)
+	checkError("Error in shareState(), client.Close(): ", err, false)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 
@@ -419,7 +453,6 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 	}
 	isWorking = true
 	abort(req.TxID)
-	removeFromWaitingMap(req.TxID)
 	*resp = true
 	printState()
 	broadcastState()
@@ -486,7 +519,6 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 			if isDeadlock(req.TxID, trId, &ids)  {
 				isAbort := resolveDeadLock(req.TxID, ids)
 				if isAbort {
-					removeFromWaitingMap(req.TxID)
 					*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 					printState()
 					broadcastState()
@@ -504,7 +536,6 @@ func (p *KVServer) Get(req GetRequest, resp *GetResponse) error {
 			imAborted := transactions[req.TxID].IsAborted
 			mutex.Unlock()
 			if imAborted {
-				removeFromWaitingMap(req.TxID)
 				*resp = GetResponse{false, returnVal, "Transaction was aborted"}
 				printState()
 				broadcastState()
@@ -579,7 +610,6 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 				isAbort := resolveDeadLock(req.TxID, ids)
 				// I was aborted
 				if isAbort {
-					removeFromWaitingMap(req.TxID)
 					*resp = PutResponse{false, "Transaction was aborted"}
 					printState()
 					broadcastState()
@@ -597,7 +627,6 @@ func (p *KVServer) Put(req PutRequest, resp *PutResponse) error {
 			imAborted := transactions[req.TxID].IsAborted
 			mutex.Unlock()
 			if imAborted {
-				removeFromWaitingMap(req.TxID)
 				*resp = PutResponse{false, "Transaction was aborted"}
 				printState()
 				broadcastState()
@@ -652,6 +681,7 @@ func abort(txId int) {
 	mutex.Lock()
 	transactions[txId] = tx
 	mutex.Unlock()
+	removeFromWaitingMap(txId)
 }
 
 
