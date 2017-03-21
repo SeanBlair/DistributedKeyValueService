@@ -30,7 +30,8 @@ var (
 	listenClientIpPort string
 
 	nextClientIsAlivePort int
-	
+	nextClientID int
+
 	transactions map[int]Transaction
 	nextTransactionId int
 	nextGlobalCommitId int
@@ -59,6 +60,8 @@ type KVNode struct {
 
 type Transaction struct {
 	ID int
+	ClientID int
+	KVNodeID int
 	PutToDoMap map[string]string 
 	KeySet map[string]bool
 	IsAborted bool
@@ -84,7 +87,12 @@ type Value string
 type KVServer int
 
 type NewConnectionResp struct {
+	ClientID int
 	IsAlivePort int
+}
+
+type NewTransactionReq struct {
+	ClientID int
 }
 
 type NewTransactionResp struct {
@@ -140,6 +148,7 @@ func main() {
 
 	nextTransactionId = 1
 	nextGlobalCommitId = 1
+	nextClientID = 1
 	transactions = make(map[int]Transaction)
 	theValueStore = make(map[string]string)
 	waitingMap = make(map[int]int)
@@ -262,7 +271,8 @@ func printState() {
 		mutex.Lock()
 		tx := transactions[txId]
 		mutex.Unlock()
-		fmt.Println("  --Transaction ID:", tx.ID, "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted, "CommitId:", tx.CommitId)
+		fmt.Println("  --Transaction ID:", tx.ID, "ClientID:", tx.ClientID, "KVNodeID:", tx.KVNodeID,
+		 "IsAborted:", tx.IsAborted, "IsCommitted:", tx.IsCommitted, "CommitId:", tx.CommitId)
 		fmt.Println("    KeySet:", getKeySetSlice(tx))
 		fmt.Println("    PutToDoMap:")
 		for k := range tx.PutToDoMap {
@@ -285,13 +295,16 @@ func (p *KVServer) NewConnection(req bool, resp * NewConnectionResp) error {
 	mutex.Lock()
 	isAlivePort := nextClientIsAlivePort
 	nextClientIsAlivePort++
+	clientID := nextClientID
+	nextClientID++
 	mutex.Unlock()
-	go monitorNewConnection(isAlivePort)
-	*resp = NewConnectionResp{isAlivePort}
+	go monitorNewConnection(isAlivePort, clientID)
+	*resp = NewConnectionResp{clientID, isAlivePort}
+	printState()
 	return nil
 }
 
-func monitorNewConnection(port int) {
+func monitorNewConnection(port int, clientID int) {
 	ip := listenClientIpPort[:strings.Index(listenClientIpPort, ":")]
 	portString := strconv.Itoa(port)
 	ln, err := net.Listen("tcp", ip + ":" + portString)
@@ -307,17 +320,47 @@ func monitorNewConnection(port int) {
 		fmt.Fprintf(conn, "Ping")
 		// listen for pong
 		buffer := make([]byte, 10)
-		n, err := conn.Read(buffer)
+		_, err := conn.Read(buffer)
 		if err, ok := err.(net.Error); ok && err.Timeout() {
-			fmt.Println("detected a dead client on port:", port)
+			fmt.Println("detected a timeout dead client on port:", port)
+			fixDeadClient(clientID)
 			break
 		}
 		if err != nil {
 			fmt.Println("detected a dead client on port:", port, "because of err:\n", err)
+			fixDeadClient(clientID)
 			break
 		}
-		fmt.Println("Received message:", string(buffer[0:n]), "on port:", port)
+		// fmt.Println("Received message:", string(buffer[0:n]), "on port:", port)
 	}
+}
+
+func fixDeadClient(clientID int) {
+	txId, isAbort := isTransactionToAbort(clientID)
+	if isAbort {
+		if !isLeader {
+			becomeLeader()	
+		}
+		isWorking = true
+		abort(txId)
+		broadcastState()
+		printState()
+		isWorking = false
+	}
+}
+
+func isTransactionToAbort(clientID int) (int, bool) {
+	mutex.Lock()
+	txs := transactions
+	mutex.Unlock()
+
+	for k := range txs {
+		t := txs[k]
+		if t.ClientID == clientID && t.IsCommitted == false && t.IsAborted == false {
+			return k, true
+		}
+	}
+	return 0, false
 }
 
 func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
@@ -334,7 +377,7 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	isLeader = kvnodes[nodeID].IsLeader
 	mutex.Unlock()
 	*resp = true
-	// printState()
+	printState()
 	if isLeader {
 		fmt.Println("\nI AM THE LEADER......")
 	} else {
@@ -692,7 +735,7 @@ func isKeyInStore(k string) bool {
 	return ok
 }
 
-func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
+func (p *KVServer) NewTransaction(req NewTransactionReq, resp *NewTransactionResp) error {
 	fmt.Println("\nReceived a call to NewTransaction()")
 	if !isLeader {
 		becomeLeader()	
@@ -700,7 +743,7 @@ func (p *KVServer) NewTransaction(req bool, resp *NewTransactionResp) error {
 	isWorking =  true
 	tID := nextTransactionId
 	nextTransactionId++
-	tx := Transaction{tID, make(map[string]string), make(map[string]bool), false, false, 0}
+	tx := Transaction{tID, req.ClientID, nodeID, make(map[string]string), make(map[string]bool), false, false, 0}
 	mutex.Lock()
 	transactions[tID] = tx
 	mutex.Unlock()

@@ -28,9 +28,9 @@ func main() {
 	done := make(chan(int))
 
 	for i := 1; i < 11; i++ {
-		go hitKvsericeSameKey(i)
+		// go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
-		// go hitKvsericePut(i)
+		go hitKvsericePut(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
 		// go hitKvsericeNewTransactionCommit(i)
@@ -52,6 +52,8 @@ func hitKvsericePut(i int) {
 	success, err := t.Put(kvservice.Key(strconv.Itoa(i)), kvservice.Value(val))
 	fmt.Println("iteration:", i, "Put returned:", success, err)
 
+	time.Sleep(time.Second)
+	
 	success, txID, err := t.Commit()
 	fmt.Println("iteration:", i, "Commit returned:", success, txID, err)
 }

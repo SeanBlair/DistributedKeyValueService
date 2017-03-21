@@ -78,7 +78,12 @@ var (
 type KVServer int
 
 type NewConnectionResp struct {
+	ClientID int
 	IsAlivePort int
+}
+
+type NewTransactionReq struct {
+	ClientID int
 }
 
 type NewTransactionResp struct {
@@ -151,9 +156,10 @@ func NewConnection(nodes []string) connection {
 	kvNodeIpPort := kvNodesIpPorts[0]
 	kvNodeIp := kvNodeIpPort[:strings.Index(kvNodeIpPort, ":")]
 	isAliveConnectionIpPort := kvNodeIp + ":" + strconv.Itoa(resp.IsAlivePort)
-	startIsAliveConnection(isAliveConnectionIpPort)
+	go startIsAliveConnection(isAliveConnectionIpPort)
 	fmt.Println("IsAlive connection started with kvnode:", kvNodesIpPorts[0], "on ipPort:", isAliveConnectionIpPort)
 	c := new(myconn)
+	c.ClientID = resp.ClientID
 	return c
 }
 
@@ -163,9 +169,8 @@ func startIsAliveConnection(ipPort string) {
 	fmt.Println("successfully started an isAlive connection with:", ipPort)
 	for {
 		buffer := make([]byte, 10)
-		n, err := conn.Read(buffer)
+		_, err := conn.Read(buffer)
 		checkError("Error in startIsAliveConnection, conn.Read()", err, true)
-		fmt.Println("Received message:", string(buffer[0:n]), "from kvnode:", ipPort)
 		fmt.Fprintf(conn, "Pong")
 	}
 }
@@ -176,19 +181,19 @@ func startIsAliveConnection(ipPort string) {
 
 // Concrete implementation of a connection interface.
 type myconn struct {
-	// TODO
+	ClientID int
 }
 
 // Create a new transaction.
 func (conn *myconn) NewTX() (tx, error) {
 	fmt.Printf("NewTX\n")
 	m := new(mytx)
-	m.ID = getNewTXID()
+	m.ID = getNewTXID(conn.ClientID)
 	return m, nil
 }
 
-func getNewTXID() int {
-	req := true
+func getNewTXID(clientID int) int {
+	req := NewTransactionReq{clientID}
 	var resp NewTransactionResp
 	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
 	checkError("rpc.Dial in getNewTXID()", err, true)
