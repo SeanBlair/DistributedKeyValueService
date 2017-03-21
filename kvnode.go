@@ -193,11 +193,11 @@ func alternateLeader() {
 		// if isLeader && !isWorking crashes....
 		canPassLeadership := isLeader && !isWorking
 		if canPassLeadership {
+			isWorking = true
 			nextLeader := chooseNextLeader()
 			fmt.Println("NEXT LEADER!!!!!!   IS:", nextLeader)
 			if nextLeader != nodeID {
 				fmt.Println("\nReleasing Leadership")
-
 				mutex.Lock()
 				node := kvnodes[nodeID]
 			 	node.IsLeader = false
@@ -208,8 +208,8 @@ func alternateLeader() {
 				node.IsLeader = true
 				kvnodes[nextLeader] = node
 				mutex.Unlock()
-
-				broadcastState()	
+				broadcastState()
+				isWorking = false	
 			}
 		}
 		time.Sleep(time.Second * 4)
@@ -402,7 +402,23 @@ func broadcastState() {
 				break
 			}	
 		}
+		if isOneNodeSystem() {
+			isLeader = true
+		}
 	}
+}
+
+func isOneNodeSystem() bool {
+	mutex.Lock()
+	nodes := kvnodes
+	mutex.Unlock()
+	for k := range nodes {
+		node := nodes[k]
+		if node.IsAlive && node.ID != nodeID {
+			return false
+		}
+	}
+	return true
 }
 
 func fixDeadKvNode(id int) {
@@ -787,6 +803,7 @@ func (p *KVServer) NewTransaction(req NewTransactionReq, resp *NewTransactionRes
 func becomeLeader() {
 	for !isLeader {
 		fmt.Println("trying to become a leader....")
+		// time.Sleep(time.Second)
 	}
 	return
 }
