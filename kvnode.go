@@ -311,13 +311,12 @@ func monitorNewConnection(port int) {
 		if err, ok := err.(net.Error); ok && err.Timeout() {
 			fmt.Println("detected a dead client on port:", port)
 			break
-		} else {
-			if err != nil {
-				fmt.Println("detected a dead client on port:", port, "because of err:\n", err)
-				break
-			}
-			fmt.Println("Received message:", string(buffer[0:n]), "on port:", port)
 		}
+		if err != nil {
+			fmt.Println("detected a dead client on port:", port, "because of err:\n", err)
+			break
+		}
+		fmt.Println("Received message:", string(buffer[0:n]), "on port:", port)
 	}
 }
 
