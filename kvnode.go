@@ -48,6 +48,10 @@ var (
 
 	// TODO set this to 4 when turn in code
 	secondsForBootstrap time.Duration = 10
+
+	updateState chan bool
+	isBecomeLeader bool
+
 )
 
 type KVNode struct {
@@ -165,6 +169,8 @@ func main() {
 	fmt.Println("nextClientIsAlivePort:", nextClientIsAlivePort)
 
 	printState()
+
+	// updateState = make(chan bool, 7)
 
 	go listenClients()
 	go listenKvNodes()
@@ -366,6 +372,11 @@ func isTransactionToAbort(clientID int) (int, bool) {
 
 func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	fmt.Println("Received a call to UpdateState()")
+	// updateState = make(chan bool)
+	if isBecomeLeader {
+		updateState <- true	
+	}
+
 	mutex.Lock()
 	transactions = req.Transactions
 	nextTransactionId = req.NextTransactionId
@@ -801,10 +812,31 @@ func (p *KVServer) NewTransaction(req NewTransactionReq, resp *NewTransactionRes
 }
 
 func becomeLeader() {
+	// set timer
+	isBecomeLeader = true
+
 	for !isLeader {
-		fmt.Println("trying to become a leader....")
-		// time.Sleep(time.Second)
-	}
+
+		updateState = make(chan bool)
+		
+		select {
+		case <-updateState:
+        	// handle(m)
+        	becomeLeader()
+		case <-time.After(5 * time.Second):
+        	fmt.Println("timed out")
+        	fmt.Println("need to set a new leader....")
+		}
+	}	
+	// for !isLeader {
+	// 	fmt.Println("trying to become a leader....")
+	// 	// time.Sleep(time.Second)
+	// 	// if timeout, 
+	// 		// if leader dead (ping leader)
+	// 		// isLeader = true
+
+
+	// }
 	return
 }
 
