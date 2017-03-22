@@ -17,6 +17,7 @@ import (
 	"strings"
 	"strconv"
 	"net"
+	"time"
 	)
 
 // Represents a key in the system.
@@ -73,6 +74,8 @@ type tx interface {
 
 var (
 	kvNodesIpPorts []string
+	currentNodeIndex int
+	clientID int
 )
 
 type KVServer int
@@ -129,6 +132,8 @@ type AbortRequest struct {
 	TxID int
 }
 
+
+
 ///////////////////////////////////////
 
 
@@ -140,37 +145,56 @@ type AbortRequest struct {
 // only way to create a new connection. Takes a set of k-v service
 // node ip:port strings.
 func NewConnection(nodes []string) connection {
-	// fmt.Printf("NewConnection with nodes:\n", nodes)
 	fmt.Println("Received call to NewConnection() with nodes:", nodes)
+
 	kvNodesIpPorts = nodes
-
-	req := true
+	currentNodeIndex = 0
 	var resp NewConnectionResp
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in getNewConnection()", err, true)
-	err = client.Call("KVServer.NewConnection", req, &resp)
-	checkError("client.Call(KVServer.NewConnection) in NewConnection(): ", err, true)
-	err = client.Close()
-	checkError("client.Close() in NewConnection(): ", err, true)
+	req := true
+	for {
+		client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+		checkError("rpc.Dial in getNewConnection()", err, false)
+		if err != nil {
+			currentNodeIndex++
+			continue
+		}// TODO REMOVE DEBUGGING STATEMENTS!!!!
+		err = client.Call("KVServer.NewConnection", req, &resp)
+		checkError("client.Call(KVServer.NewConnection) in NewConnection(): ", err, false)
+		if err != nil {
+			currentNodeIndex++
+			continue
+		}
+		err = client.Close()
+		checkError("client.Close() in NewConnection(): ", err, true)
+		if err != nil {
+			currentNodeIndex++
+			continue
+		}
+		break
+	}
 
-	kvNodeIpPort := kvNodesIpPorts[0]
+	kvNodeIpPort := kvNodesIpPorts[currentNodeIndex]
 	kvNodeIp := kvNodeIpPort[:strings.Index(kvNodeIpPort, ":")]
 	isAliveConnectionIpPort := kvNodeIp + ":" + strconv.Itoa(resp.IsAlivePort)
 	go startIsAliveConnection(isAliveConnectionIpPort)
-	fmt.Println("IsAlive connection started with kvnode:", kvNodesIpPorts[0], "on ipPort:", isAliveConnectionIpPort)
+	fmt.Println("IsAlive connection started with kvnode:", kvNodesIpPorts[currentNodeIndex], "on ipPort:", isAliveConnectionIpPort)
 	c := new(myconn)
 	c.ClientID = resp.ClientID
+	clientID = resp.ClientID
 	return c
 }
 
 func startIsAliveConnection(ipPort string) {
 	conn, err := net.Dial("tcp", ipPort)
-	checkError("Error in startIsAliveConnection(), net.Dial()", err, true)
+	checkError("Error in startIsAliveConnection(), net.Dial()", err, false)
 	fmt.Println("successfully started an isAlive connection with:", ipPort)
 	for {
 		buffer := make([]byte, 10)
 		_, err := conn.Read(buffer)
-		checkError("Error in startIsAliveConnection, conn.Read()", err, true)
+		checkError("Error in startIsAliveConnection, conn.Read()", err, false)
+		if err != nil {
+			break
+		}
 		fmt.Fprintf(conn, "Pong")
 	}
 }
@@ -192,15 +216,35 @@ func (conn *myconn) NewTX() (tx, error) {
 	return m, nil
 }
 
-func getNewTXID(clientID int) int {
-	req := NewTransactionReq{clientID}
+func getNewTXID(cID int) int {
+	req := NewTransactionReq{cID}
 	var resp NewTransactionResp
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in getNewTXID()", err, true)
-	err = client.Call("KVServer.NewTransaction", req, &resp)
-	checkError("client.Call(KVServer.NewTransaction) in getNewTXID(): ", err, true)
-	err = client.Close()
-	checkError("client.Close() in getNewTXID(): ", err, true)
+
+	for {
+		client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+		checkError("rpc.Dial in getNewTXID()", err, false)
+		if err != nil {
+			NewConnection(kvNodesIpPorts)
+			req = NewTransactionReq{clientID}
+			continue
+		}
+		err = client.Call("KVServer.NewTransaction", req, &resp)
+		checkError("client.Call(KVServer.NewTransaction) in getNewTXID(): ", err, false)
+		if err != nil {
+			NewConnection(kvNodesIpPorts)
+			req = NewTransactionReq{clientID}
+			continue
+		}
+		err = client.Close()
+		checkError("client.Close() in getNewTXID(): ", err, true)
+		if err != nil {
+			NewConnection(kvNodesIpPorts)
+			req = NewTransactionReq{clientID}
+			continue
+		}
+		break
+	}
+
 	return resp.TxID
 }
 
@@ -225,15 +269,24 @@ type mytx struct {
 // Retrieves a value v associated with a key k.
 func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 	fmt.Printf("Get\n")
+	var nilVal Value
 	req := GetRequest{t.ID, k}
 	var resp GetResponse
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in Get()", err, true)
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+	checkError("rpc.Dial in Get()", err, false)
+	if err != nil {
+		return false, nilVal, err
+	}
 	err = client.Call("KVServer.Get", req, &resp)
-	checkError("client.Call(KVServer.Get) Get(): ", err, true)
+	checkError("client.Call(KVServer.Get) Get(): ", err, false)
+	if err != nil {
+		return false, nilVal, err
+	}
 	err = client.Close()
-	checkError("client.Close() in Get(): ", err, true)
-	// err = errors.New(resp.Err)
+	checkError("client.Close() in Get(): ", err, false)
+	if err != nil {
+		return false, nilVal, err
+	}
 	return resp.Success, resp.Value, errors.New(resp.Err) 
 }
 
@@ -248,12 +301,21 @@ func (t *mytx) Put(k Key, v Value) (success bool, err error) {
 func callPutRPC(transactionId int, key Key, value Value) (bool, error) {
 	req := PutRequest{transactionId, key, value}
 	var resp PutResponse
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in callPutRPC()", err, true)
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+	checkError("rpc.Dial in callPutRPC()", err, false)
+	if err != nil {
+		return false, err
+	}
 	err = client.Call("KVServer.Put", req, &resp)
-	checkError("client.Call(KVServer.Put) in callPutRPC(): ", err, true)
+	checkError("client.Call(KVServer.Put) in callPutRPC(): ", err, false)
+	if err != nil {
+		return false, err
+	}
 	err = client.Close()
-	checkError("client.Close() in callPutRPC(): ", err, true)
+	checkError("client.Close() in callPutRPC(): ", err, false)
+	if err != nil {
+		return false, err
+	}
 	return resp.Success, errors.New(resp.Err)
 }
 
@@ -262,12 +324,21 @@ func (t *mytx) Commit() (success bool, txID int, err error) {
 	fmt.Printf("Commit\n")
 	req := CommitRequest{t.ID}
 	var resp CommitResponse
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in Commit()", err, true)
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+	checkError("rpc.Dial in Commit()", err, false)
+	if err != nil {
+		return false, 0, err
+	}
 	err = client.Call("KVServer.Commit", req, &resp)
-	checkError("client.Call(KVServer.Commit) Commit(): ", err, true)
+	checkError("client.Call(KVServer.Commit) Commit(): ", err, false)
+	if err != nil {
+		return false, 0, err
+	}
 	err = client.Close()
-	checkError("client.Close() in Commit(): ", err, true)
+	checkError("client.Close() in Commit(): ", err, false)
+	if err != nil {
+		return false, 0, err
+	}
 	return resp.Success, resp.CommitId, errors.New(resp.Err)
 }
 
@@ -276,12 +347,21 @@ func (t *mytx) Abort() {
 	fmt.Printf("Abort\n")
 	req := AbortRequest{t.ID}
 	var resp bool
-	client, err := rpc.Dial("tcp", kvNodesIpPorts[0])
-	checkError("rpc.Dial in Abort()", err, true)
+	client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
+	checkError("rpc.Dial in Abort()", err, false)
+	if err != nil {
+		return
+	}
 	err = client.Call("KVServer.Abort", req, &resp)
-	checkError("client.Call(KVServer.Abort) Abort(): ", err, true)
+	checkError("client.Call(KVServer.Abort) Abort(): ", err, false)
+	if err != nil {
+		return
+	}
 	err = client.Close()
-	checkError("client.Close() in Abort(): ", err, true)
+	checkError("client.Close() in Abort(): ", err, false)
+	if err != nil {
+		return
+	}
 }
 
 // /Transaction interface

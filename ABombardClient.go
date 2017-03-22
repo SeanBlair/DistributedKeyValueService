@@ -24,14 +24,18 @@ var (
 	nodes []string
 )
 func main() {
-	nodes = append(nodes, "localhost:8888")
+	// nodes = append(nodes, "localhost:2222")
+	// nodes = appen
+
+	nodes = []string{"localhost:2222", "localhost:4444", "localhost:6666", "localhost:8888"}
+
 	done := make(chan(int))
 
 	for i := 1; i < 2; i++ {
 		// go hitKvsericeSameKey(i)
-		// go hitKvsericeDifferentKey(i)
+		go hitKvsericeDifferentKey(i)
 		// go hitKvsericePut(i)
-		go hitKvsericeNewTransaction(i)
+		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
 		// go hitKvsericeNewTransactionCommit(i)
 	}
@@ -84,8 +88,10 @@ func hitKvsericeNewTransaction(i int) {
 	c := kvservice.NewConnection(nodes)
 	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
-	t, err := c.NewTX()
-	fmt.Println("iteration:", i, "NewTX returned:", t, err)
+	// time.Sleep()
+
+	// t, err := c.NewTX()
+	// fmt.Println("iteration:", i, "NewTX returned:", t, err)
 }
 
 
@@ -95,11 +101,17 @@ func hitKvsericeDifferentKey(i int) {
 	c := kvservice.NewConnection(nodes)
 	fmt.Println("iteration:", i, "NewConnection returned:", c)
 
+
 	t, err := c.NewTX()
 	fmt.Println("iteration:", i, "NewTX returned:", t, err)
 
+
+
 	success, err := t.Put(kvservice.Key(strconv.Itoa(i)), kvservice.Value(val))
 	fmt.Println("iteration:", i, "Put returned:", success, err)
+
+	
+	time.Sleep(time.Second * 5)
 
 	success, v, err := t.Get(kvservice.Key(strconv.Itoa(i)))
 	fmt.Println("iteration:", i, "Get returned:", success, v, err)
