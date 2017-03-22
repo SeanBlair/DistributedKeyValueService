@@ -49,9 +49,7 @@ var (
 	// TODO set this to 4 when turn in code
 	secondsForBootstrap time.Duration = 10
 
-	updateState chan bool
-	isBecomeLeader bool
-
+	isTimeout bool
 )
 
 type KVNode struct {
@@ -228,8 +226,9 @@ func chooseNextLeader() (int) {
 			for i := 1; i <= len(nodeIds); i++ {
 				nextIndex := (myIndex + i) % len(nodeIds)
 				nextId := nodeIds[nextIndex]
-				// TODO lock???
+				mutex.Lock()
 				kvnode := kvnodes[nextId]
+				mutex.Unlock()
 				if kvnode.IsAlive {
 					return kvnode.ID
 				}
@@ -237,6 +236,39 @@ func chooseNextLeader() (int) {
 		}
 	}
 	return nodeID
+}
+
+func getOffsetFromLeader() (offset int) {
+	offset = 1
+	leaderId := getLeaderId()
+	leaderIndex := leaderId - 1
+	for i := 1; i <= len(nodeIds); i++ {
+		nextIndex := (leaderIndex + i) % len(nodeIds)
+		nextId := nodeIds[nextIndex]
+		mutex.Lock()
+		kvnode := kvnodes[nextId]
+		mutex.Unlock()
+		if kvnode.ID == nodeID {
+			return
+		} else if kvnode.IsAlive {
+			offset++
+		}
+	}
+	return
+}
+
+
+func getLeaderId() int {
+	mutex.Lock()
+	nodes := kvnodes
+	mutex.Unlock()
+	for k := range nodes {
+		node := nodes[k]
+		if node.IsLeader {
+			return k
+		}
+	}
+	return 0
 }
 
 func setKvnodesAndNodeIds() {
@@ -372,11 +404,6 @@ func isTransactionToAbort(clientID int) (int, bool) {
 
 func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	fmt.Println("Received a call to UpdateState()")
-	// updateState = make(chan bool)
-	if isBecomeLeader {
-		updateState <- true	
-	}
-
 	mutex.Lock()
 	transactions = req.Transactions
 	nextTransactionId = req.NextTransactionId
@@ -397,7 +424,6 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	}
 	return nil
 }
-
 
 func broadcastState() {
 	for id := range kvnodes {
@@ -434,9 +460,22 @@ func isOneNodeSystem() bool {
 
 func fixDeadKvNode(id int) {
 	mutex.Lock()
-	n := kvnodes[id]
-	n.IsAlive = false
-	kvnodes[id] = n
+	nodes := kvnodes
+	mutex.Unlock()
+
+	deadNode := nodes[id]
+	deadNode.IsAlive = false
+	if deadNode.IsLeader {
+		deadNode.IsLeader = false
+		isLeader = true
+		myNode := nodes[nodeID]
+		myNode.IsLeader = true
+		nodes[nodeID] = myNode
+	}
+	nodes[id] = deadNode
+
+	mutex.Lock()
+	kvnodes = nodes
 	mutex.Unlock()
 	mutex.Lock()
 	txs := transactions
@@ -812,32 +851,43 @@ func (p *KVServer) NewTransaction(req NewTransactionReq, resp *NewTransactionRes
 }
 
 func becomeLeader() {
-	// set timer
-	isBecomeLeader = true
+	// offset := getOffsetFromLeader()
+	offset := 1
+	isTimeout = false
+	go startTimer(offset)
 
 	for !isLeader {
-
-		updateState = make(chan bool)
-		
-		select {
-		case <-updateState:
-        	// handle(m)
-        	becomeLeader()
-		case <-time.After(5 * time.Second):
-        	fmt.Println("timed out")
-        	fmt.Println("need to set a new leader....")
+		fmt.Println("Waiting to become a leader....")
+		if isTimeout {
+			becomeTheLeader()
+			break
 		}
-	}	
-	// for !isLeader {
-	// 	fmt.Println("trying to become a leader....")
-	// 	// time.Sleep(time.Second)
-	// 	// if timeout, 
-	// 		// if leader dead (ping leader)
-	// 		// isLeader = true
+	}
+}
+
+func becomeTheLeader() {
+	mutex.Lock()
+	nodes := kvnodes
+	mutex.Unlock()
+	leaderId := getLeaderId()
+	leaderNode := nodes[leaderId]
+	leaderNode.IsLeader = false
+	nodes[leaderId] = leaderNode
+	myNode := nodes[nodeID]
+	myNode.IsLeader = true
+	isLeader = true
+	nodes[nodeID] = myNode
+	mutex.Lock()
+	kvnodes = nodes
+	mutex.Unlock()
+	broadcastState()
+}
 
 
-	// }
-	return
+func startTimer(offset int) {
+	isTimeout = false
+	time.Sleep(time.Second * 5 * time.Duration(offset))
+	isTimeout = true
 }
 
 func listenClients() {
