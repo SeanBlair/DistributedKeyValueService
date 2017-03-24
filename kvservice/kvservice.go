@@ -176,6 +176,7 @@ func NewConnection(nodes []string) connection {
 	kvNodeIpPort := kvNodesIpPorts[currentNodeIndex]
 	kvNodeIp := kvNodeIpPort[:strings.Index(kvNodeIpPort, ":")]
 	isAliveConnectionIpPort := kvNodeIp + ":" + strconv.Itoa(resp.IsAlivePort)
+	time.Sleep(time.Second)
 	go startIsAliveConnection(isAliveConnectionIpPort)
 	fmt.Println("IsAlive connection started with kvnode:", kvNodesIpPorts[currentNodeIndex], "on ipPort:", isAliveConnectionIpPort)
 	c := new(myconn)
@@ -186,7 +187,6 @@ func NewConnection(nodes []string) connection {
 
 
 func startIsAliveConnection(ipPort string) {
-	time.Sleep(time.Second)
 	conn, err := net.Dial("tcp", ipPort)
 	checkError("Error in startIsAliveConnection(), net.Dial()", err, false)
 	if err != nil {
