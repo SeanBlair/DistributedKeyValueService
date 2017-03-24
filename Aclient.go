@@ -32,6 +32,9 @@ func main() {
 	success, err := t.Put("A", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
+	success, err = t.Put("X", "Aclient")
+	fmt.Printf("Put returned: %v, %v\n", success, err)
+
 	time.Sleep(time.Second * 15)
 
 	// success, err = t.Put("Z", "Aclient")
