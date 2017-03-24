@@ -47,7 +47,7 @@ var (
 	nodeIds []int
 
 	// TODO set this to 4 when turn in code
-	secondsForBootstrap time.Duration = 10
+	secondsForBootstrap time.Duration = 4
 
 	isTimeout bool
 )
@@ -74,6 +74,7 @@ type Transaction struct {
 type UpdateStateRequest struct {
 	Transactions map[int]Transaction
 	NextTransactionId int
+	NextClientID int
 	NextGlobalCommitId int
 	TheValueStore map[string]string
 	WaitingMap map[int]int
@@ -331,6 +332,11 @@ func getKeySetSlice(tx Transaction) (keySetString []string) {
 
 func (p *KVServer) NewConnection(req bool, resp * NewConnectionResp) error {
 	fmt.Println("Received a call to NewConnection()")
+	// need to have NextClientID as global state.
+	if !isLeader {
+		becomeLeader()	
+	}
+	isWorking = true
 	mutex.Lock()
 	isAlivePort := nextClientIsAlivePort
 	nextClientIsAlivePort++
@@ -340,6 +346,8 @@ func (p *KVServer) NewConnection(req bool, resp * NewConnectionResp) error {
 	go monitorNewConnection(isAlivePort, clientID)
 	*resp = NewConnectionResp{clientID, isAlivePort}
 	printState()
+	broadcastState()
+	isWorking = false
 	return nil
 }
 
@@ -351,6 +359,11 @@ func monitorNewConnection(port int, clientID int) {
 	fmt.Println("listening for connection to monitor on port:", port)
 	conn, err := ln.Accept()
 	fmt.Println("Accepted a connection to monitor on port:", port)
+
+	// TODO handle error
+	if err != nil {
+		fixDeadClient(clientID)
+	}
 
 	for {
 		// set timeout
@@ -408,6 +421,7 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 	transactions = req.Transactions
 	nextTransactionId = req.NextTransactionId
 	nextGlobalCommitId = req.NextGlobalCommitId
+	nextClientID = req.NextClientID
 	theValueStore = req.TheValueStore
 	waitingMap = req.WaitingMap
 	kvnodes = req.KVNodes
@@ -490,7 +504,7 @@ func fixDeadKvNode(id int) {
 
 func shareState(ipPort string) error {
 	mutex.Lock()
-	req := UpdateStateRequest{transactions, nextTransactionId, nextGlobalCommitId, theValueStore, waitingMap, kvnodes}
+	req := UpdateStateRequest{transactions, nextTransactionId, nextClientID, nextGlobalCommitId, theValueStore, waitingMap, kvnodes}
 	mutex.Unlock()
 	var resp bool
 	client, err := rpc.Dial("tcp", ipPort)
