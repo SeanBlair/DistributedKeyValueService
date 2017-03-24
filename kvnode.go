@@ -518,7 +518,12 @@ func (p *KVServer) Abort(req AbortRequest, resp *bool) error {
 		becomeLeader()	
 	}
 	isWorking = true
-	abort(req.TxID)
+	mutex.Lock()
+	tx := transactions[req.TxID]
+	mutex.Unlock()
+	if !tx.IsAborted && !tx.IsCommitted {
+		abort(req.TxID)
+	}
 	*resp = true
 	printState()
 	broadcastState()

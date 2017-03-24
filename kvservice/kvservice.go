@@ -184,9 +184,14 @@ func NewConnection(nodes []string) connection {
 	return c
 }
 
+
 func startIsAliveConnection(ipPort string) {
+	time.Sleep(time.Second)
 	conn, err := net.Dial("tcp", ipPort)
 	checkError("Error in startIsAliveConnection(), net.Dial()", err, false)
+	if err != nil {
+		return
+	}
 	fmt.Println("successfully started an isAlive connection with:", ipPort)
 	for {
 		buffer := make([]byte, 10)
