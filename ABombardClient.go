@@ -27,13 +27,13 @@ func main() {
 	// nodes = append(nodes, "localhost:2222")
 	// nodes = appen
 
-	nodes = []string{"localhost:2222", "localhost:4444", "localhost:6666", "localhost:8888"}
+	nodes = []string{"52.233.41.66:2222", "40.83.123.45:2222", "52.169.45.154:2222", "13.84.179.102:2222"}
 
 	done := make(chan(int))
 
 	for i := 1; i < 2; i++ {
-		// go hitKvsericeSameKey(i)
-		go hitKvsericeDifferentKey(i)
+		go hitKvsericeSameKey(i)
+		//go hitKvsericeDifferentKey(i)
 		// go hitKvsericePut(i)
 		// go hitKvsericeNewTransaction(i)
 		// go hitKvsericeNewTransactionAbort(i)
@@ -111,7 +111,7 @@ func hitKvsericeDifferentKey(i int) {
 	fmt.Println("iteration:", i, "Put returned:", success, err)
 
 	
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	success, v, err := t.Get(kvservice.Key(strconv.Itoa(i)))
 	fmt.Println("iteration:", i, "Get returned:", success, v, err)
@@ -135,7 +135,7 @@ func hitKvsericeSameKey(i int) {
 	success, err := t.Put("A", kvservice.Value(val))
 	fmt.Println("iteration:", i, "Put returned:", success, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 10)
 
 	success, commitId, err := t.Commit()
 	fmt.Println("iteration:", i, "Commit returned:", success, commitId, err)

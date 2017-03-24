@@ -24,10 +24,10 @@ var (
 	nodes []string
 )
 func main() {
-	nodes = append(nodes, "localhost:4444")
+	nodes = []string{"52.233.41.66:2222", "40.83.123.45:2222", "52.169.45.154:2222", "13.84.179.102:2222"}
 	done := make(chan(int))
 
-	for i := 1; i < 11; i++ {
+	for i := 1; i < 2; i++ {
 		// go hitKvsericePut(i)
 		go hitKvsericeSameKey(i)
 		// go hitKvsericeDifferentKey(i)
