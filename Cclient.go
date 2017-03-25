@@ -35,7 +35,7 @@ func main() {
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
 
-	// time.Sleep(time.Second * 12)
+	// time.Sleep(time.Second * 10)
 
 	// success, err = t.Put("O", "Cclient")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)

@@ -35,14 +35,16 @@ func main() {
 	success, err = t.Put("AA", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// time.Sleep(time.Second * 10)
+	// time.Sleep(time.Second * 15)
 
 	// success, err = t.Put("Z", "Aclient")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, v, err := t.Get("A")
-	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+	// success, v, err := t.Get("B")
+	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
+
+	// time.Sleep(time.Second * 10)
 
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)

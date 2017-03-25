@@ -37,21 +37,21 @@ func main() {
 
 
 
-	t.Abort()
+	// t.Abort()
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
 
 
 	// time.Sleep(time.Second * 2)
 
-	t2, err := c.NewTX()
-	fmt.Printf("NewTX returned: %v, %v\n", t2, err)
+	// t2, err := c.NewTX()
+	// fmt.Printf("NewTX returned: %v, %v\n", t2, err)
 
-	success, v, err := t2.Get("DD")
-	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+	// success, v, err := t2.Get("DD")
+	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
-	success, txID, err = t2.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	// success, txID, err = t2.Commit()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
 
 
 	// fmt.Println("Successfully aborted!!!! :))")

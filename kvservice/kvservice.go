@@ -11,14 +11,15 @@ package kvservice
 import (
 	"fmt"
 	"net/rpc"
-	"log"
-	"os"
+	// "log"
 	"errors"
-	"strings"
-	"strconv"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"time"
-	)
+	// "math/rand"
+)
 
 // Represents a key in the system.
 type Key string
@@ -73,15 +74,15 @@ type tx interface {
 ///////////// Our variables////////////
 
 var (
-	kvNodesIpPorts []string
+	kvNodesIpPorts   []string
 	currentNodeIndex int
-	clientID int
+	clientID         int
 )
 
 type KVServer int
 
 type NewConnectionResp struct {
-	ClientID int
+	ClientID    int
 	IsAlivePort int
 }
 
@@ -94,27 +95,26 @@ type NewTransactionResp struct {
 }
 
 type PutRequest struct {
-	TxID int
-	Key Key
+	TxID  int
+	Key   Key
 	Value Value
 }
 
 type PutResponse struct {
 	Success bool
-	// Err error 
+	// Err error
 	Err string
 }
 
-
 type GetRequest struct {
 	TxID int
-	Key Key
+	Key  Key
 }
 
 type GetResponse struct {
 	Success bool
-	Value Value 
-	// Err error 
+	Value   Value
+	// Err error
 	Err string
 }
 
@@ -123,21 +123,16 @@ type CommitRequest struct {
 }
 
 type CommitResponse struct {
-	Success bool
+	Success  bool
 	CommitId int
-	Err string
+	Err      string
 }
 
 type AbortRequest struct {
 	TxID int
 }
 
-
-
 ///////////////////////////////////////
-
-
-
 
 //////////////////////////////////////////////
 
@@ -157,7 +152,7 @@ func NewConnection(nodes []string) connection {
 		if err != nil {
 			currentNodeIndex++
 			continue
-		}// TODO REMOVE DEBUGGING STATEMENTS!!!!
+		} // TODO REMOVE DEBUGGING STATEMENTS!!!!
 		err = client.Call("KVServer.NewConnection", req, &resp)
 		checkError("client.Call(KVServer.NewConnection) in NewConnection(): ", err, false)
 		if err != nil {
@@ -185,7 +180,6 @@ func NewConnection(nodes []string) connection {
 	return c
 }
 
-
 func startIsAliveConnection(ipPort string) {
 	conn, err := net.Dial("tcp", ipPort)
 	checkError("Error in startIsAliveConnection(), net.Dial()", err, false)
@@ -203,7 +197,6 @@ func startIsAliveConnection(ipPort string) {
 		fmt.Fprintf(conn, "Pong")
 	}
 }
-
 
 //////////////////////////////////////////////
 // Connection interface
@@ -250,6 +243,7 @@ func getNewTXID(cID int) int {
 		break
 	}
 
+	// time.Sleep(time.Second)
 	return resp.TxID
 }
 
@@ -292,7 +286,7 @@ func (t *mytx) Get(k Key) (success bool, v Value, err error) {
 	if err != nil {
 		return false, nilVal, err
 	}
-	return resp.Success, resp.Value, errors.New(resp.Err) 
+	return resp.Success, resp.Value, errors.New(resp.Err)
 }
 
 // Associates a value v with a key k.
@@ -327,6 +321,7 @@ func callPutRPC(transactionId int, key Key, value Value) (bool, error) {
 // Commits the transaction.
 func (t *mytx) Commit() (success bool, txID int, err error) {
 	fmt.Printf("Commit\n")
+
 	req := CommitRequest{t.ID}
 	var resp CommitResponse
 	client, err := rpc.Dial("tcp", kvNodesIpPorts[currentNodeIndex])
@@ -372,11 +367,10 @@ func (t *mytx) Abort() {
 // /Transaction interface
 //////////////////////////////////////////////
 
-
 // Prints msg + err to console and exits program if exit == true
 func checkError(msg string, err error, exit bool) {
 	if err != nil {
-		log.Println(msg, err)
+		// log.Println(msg, err)
 		if exit {
 			os.Exit(-1)
 		}
