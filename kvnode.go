@@ -15,6 +15,7 @@ import (
 	"sync"
 	"bufio"
 	"sort"
+	"math/rand"
 )
 
 var (
@@ -198,7 +199,7 @@ func alternateLeader() {
 		// if isLeader && !isWorking crashes....
 		canPassLeadership := isLeader && !isWorking
 		if canPassLeadership {
-			isWorking = true
+			// isWorking = true
 			nextLeader := chooseNextLeader()
 			fmt.Println("NEXT LEADER!!!!!!   IS:", nextLeader)
 			if nextLeader != nodeID {
@@ -214,10 +215,10 @@ func alternateLeader() {
 				kvnodes[nextLeader] = node
 				mutex.Unlock()
 				broadcastState()
-				isWorking = false	
+				// isWorking = false	
 			}
 		}
-		time.Sleep(time.Second * 4)
+		time.Sleep(time.Second)
 	}
 }
 
@@ -440,11 +441,12 @@ func (p *KVServer) UpdateState(req UpdateStateRequest, resp *bool) error {
 }
 
 func broadcastState() {
+	leaderId := getLeaderId()
 	for id := range kvnodes {
 		mutex.Lock()
 		node := kvnodes[id]
 		mutex.Unlock()
-		if id != nodeID && node.IsAlive == true {
+		if id != nodeID && id != leaderId && node.IsAlive == true {
 			err := shareState(node.IpPort)
 			if err != nil {
 				fixDeadKvNode(id)
@@ -457,7 +459,24 @@ func broadcastState() {
 			isLeader = true
 		}
 	}
+
+	mutex.Lock()
+	leadNode := kvnodes[leaderId]
+	mutex.Unlock()
+	if leaderId != nodeID && leadNode.IsAlive {
+		err := shareState(leadNode.IpPort)
+		if err != nil {
+			fixDeadKvNode(leaderId)
+			broadcastState()
+			printState()
+		}	
+	}
+	if isOneNodeSystem() {
+			isLeader = true
+	}
 }
+
+
 
 func isOneNodeSystem() bool {
 	mutex.Lock()
@@ -569,6 +588,9 @@ func (p *KVServer) Commit(req CommitRequest, resp *CommitResponse) error {
 
 		tx.PutToDoMap = make(map[string]string)
 		tx.KeySet = make(map[string]bool)
+
+
+
 		tx.IsCommitted = true
 		tx.CommitId = nextGlobalCommitId
 		mutex.Lock()
@@ -665,6 +687,12 @@ func getValue(tid int, key string) Value {
 
 func updateKeySet(tid int, key string) {
 	mutex.Lock()
+	if ks := transactions[tid].KeySet; ks == nil {
+		kset := make(map[string]bool)
+		t := transactions[tid]
+		t.KeySet = kset
+		transactions[tid] = t
+	}
 	transactions[tid].KeySet[key] = true
 	mutex.Unlock()
 }
@@ -826,21 +854,41 @@ func canAccessKey(key string, myId int) (bool, int) {
 	if ok {
 		return true, 0
 	} else {
-		for k := range transactions {
-			mutex.Lock()
-			tr:= transactions[k]
-			mutex.Unlock()
+		mutex.Lock()
+		txs := transactions
+		mutex.Unlock()
+		
+		for k := range txs {
+			tr:= txs[k]
 			_, ok = tr.KeySet[key]
 			if ok && !tr.IsAborted && !tr.IsCommitted {
 				return false, tr.ID	
 			}
 		}
+
+		// mutex.Unlock()
+		// for k := range transactions {
+		// 	mutex.Lock()
+		// 	tr:= transactions[k]
+		// 	mutex.Unlock()
+		// 	_, ok = tr.KeySet[key]
+		// 	if ok && !tr.IsAborted && !tr.IsCommitted {
+		// 		return false, tr.ID	
+		// 	}
+		// }
+
 		return true, 0
 	}
 }
 
 func setPutTransactionRecord(req PutRequest) {
 	mutex.Lock()
+	if ptdm := transactions[req.TxID].PutToDoMap; ptdm == nil {
+		newptdm := make(map[string]string)
+		t := transactions[req.TxID]
+		t.PutToDoMap = newptdm
+		transactions[req.TxID] = t
+	}
 	transactions[req.TxID].PutToDoMap[string(req.Key)] = string(req.Value)
 	mutex.Unlock()
 }
@@ -871,13 +919,19 @@ func (p *KVServer) NewTransaction(req NewTransactionReq, resp *NewTransactionRes
 
 func becomeLeader() {
 	// offset := getOffsetFromLeader()
-	offset := 1
 	isTimeout = false
+
+	s1 := rand.NewSource(time.Now().UnixNano())
+    r1 := rand.New(s1)
+    offset := r1.Intn(20)
+    fmt.Println("Offset:", offset)
+
 	go startTimer(offset)
 
 	for !isLeader {
 		fmt.Println("Waiting to become a leader....")
 		if isTimeout {
+			fmt.Println("TIMEOUTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
 			becomeTheLeader()
 			break
 		}
@@ -905,7 +959,7 @@ func becomeTheLeader() {
 
 func startTimer(offset int) {
 	isTimeout = false
-	time.Sleep(time.Second * 5 * time.Duration(offset))
+	time.Sleep(time.Second * 20 + time.Duration(offset))
 	isTimeout = true
 }
 

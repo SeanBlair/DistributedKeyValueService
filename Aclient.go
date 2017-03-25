@@ -15,7 +15,7 @@ import "./kvservice"
 
 import (
 	"fmt"
-	"time"
+	// "time"
 )
 func main() {
 	var nodes []string
@@ -32,15 +32,15 @@ func main() {
 	success, err := t.Put("A", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, err = t.Put("X", "Aclient")
+	success, err = t.Put("AA", "Aclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	time.Sleep(time.Second * 15)
+	// time.Sleep(time.Second * 10)
 
 	// success, err = t.Put("Z", "Aclient")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, v, err := t.Get("D")
+	success, v, err := t.Get("A")
 	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
 

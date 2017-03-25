@@ -32,10 +32,15 @@ func main() {
 	success, err := t.Put("B", "Bclient")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// success, err = t.Put("X", "Commited stuff")
+	success, err = t.Put("BB", "Bclient")
+	fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	// time.Sleep(time.Second * 10)
+
+	// success, err = t.Put("X", "Bclient")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, v, err := t.Get("A")
+	success, v, err := t.Get("BB")
 	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
 	
@@ -47,7 +52,7 @@ func main() {
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
 
-	// time.Sleep(time.Second * 5)
+	
 
 
 	// t2, err := c.NewTX()
