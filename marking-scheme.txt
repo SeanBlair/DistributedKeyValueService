@@ -1,12 +1,12 @@
-Total mark: [13/100]
+Total mark: [21/100]
 ---------------------------------------------------
 
 For full descriptions of the testcases please check out:
  https://docs.google.com/document/d/1zkdhW2txUbtWMLnHx9Sf_5BeOddJ_46nFjzduIV_V2w/edit?usp=sharing
 
-Testcase A:                    [0/3]
+Testcase A:                    [3/3]
 
-Testcase B:                    [0/5]
+Testcase B:                    [5/5]
 
 Testcase C:                    [4/4]
 
@@ -36,7 +36,7 @@ Testcase O:                    [0/5]
 
 ---------------------------------------------------
 
-Total mark before penalties:               [13/100]
+Total mark before penalties:               [21/100]
 
 ------------------
 Comments/Penalties
