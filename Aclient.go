@@ -15,13 +15,15 @@ import "./kvservice"
 
 import (
 	"fmt"
-	// "time"
+	"time"
 )
 func main() {
 	var nodes []string
-	nodes = []string{"52.233.41.66:2222", "40.83.123.45:2222", "52.169.45.154:2222", "13.84.179.102:2222"}
-
-	done := make(chan(int))
+	// nodes = []string{"52.233.45.243:2222"}
+	nodes = []string{"52.233.45.243:2222", "52.175.29.87:2222", "40.69.195.111:2222"}
+	// nodes = []string{"52.175.29.87:2222", "40.6.195.111:2222", "52.233.45.243:2222"}
+	// nodes = []string{"40.6.195.111:2222", "52.233.45.243:2222", "52.175.29.87:2222"}
+	// done := make(chan(int))
 
 	c := kvservice.NewConnection(nodes)
 	fmt.Printf("NewConnection returned: %v\n", c)
@@ -29,22 +31,34 @@ func main() {
 	t, err := c.NewTX()
 	fmt.Printf("NewTX returned: %v, %v\n", t, err)
 
-	success, err := t.Put("A", "Aclient")
+	success, err := t.Put("X", "AclientX")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, err = t.Put("AA", "Aclient")
-	fmt.Printf("Put returned: %v, %v\n", success, err)
-
-	// time.Sleep(time.Second * 15)
-
-	// success, err = t.Put("Z", "Aclient")
+	// success, err = t.Put("W", "AclientW")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// success, v, err := t.Get("B")
+	// success, err = t.Put("J", "AclientJ")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	fmt.Println("Sleeping for 30 seconds...")
+	time.Sleep(time.Second * 30)
+
+	// t.Abort()
+	// fmt.Println("Just aborted the tx")
+
+	// success, err = t.Put("Y", "AclientY")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
+
+
+	success, err = t.Put("Z", "Aclient")
+	fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	// success, v, err := t.Get("Z")
 	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
 
-	// time.Sleep(time.Second * 10)
+	// fmt.Println("waiting 10 seconds for system to figure out it aborted....")
+	// time.Sleep(time.Second * 1)
 
 	success, txID, err := t.Commit()
 	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
@@ -76,5 +90,5 @@ func main() {
 	c.Close()
 
 	// All peers will wait here
-	<-done
+	// <-done
 }

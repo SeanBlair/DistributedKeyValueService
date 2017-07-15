@@ -20,17 +20,9 @@ import (
 func main() {
 	var nodes []string
 	// nodes = []string{"52.233.45.243:2222"}
-
-	// nodes = []string{"52.233.45.243:2222", "52.175.29.87:2222"}
-	// nodes = []string{"52.175.29.87:2222", "52.233.45.243:2222"}
-	
-	// nodes = []string{"52.233.45.243:2222", "40.69.195.111:2222"}
-	// nodes = []string{"40.69.195.111:2222", "52.233.45.243:2222"}
-
-	// nodes = []string{"52.233.45.243:2222", "52.175.29.87:2222", "40.69.195.111:2222"}
-	nodes = []string{"52.175.29.87:2222", "40.6.195.111:2222", "52.233.45.243:2222"}
-	// nodes = []string{"40.69.195.111:2222", "52.233.45.243:2222", "52.175.29.87:2222"}
-
+	nodes = []string{"52.233.45.243:2222", "52.175.29.87:2222", "40.69.195.111:2222"}
+	// nodes = []string{"52.175.29.87:2222", "40.6.195.111:2222", "52.233.45.243:2222"}
+	// nodes = []string{"40.6.195.111:2222", "52.233.45.243:2222", "52.175.29.87:2222"}
 	// done := make(chan(int))
 
 	c := kvservice.NewConnection(nodes)
@@ -39,32 +31,37 @@ func main() {
 	t, err := c.NewTX()
 	fmt.Printf("NewTX returned: %v, %v\n", t, err)
 
-	success, err := t.Put("Y", "BclientY")
+	success, err := t.Put("X", "BclientX")
 	fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// success, err = t.Put("Z", "BclientZ")
+	// success, err = t.Put("W", "AclientW")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// t.Abort()
-	// fmt.Println("Just aborted the tx")
-
-	// success, err = t.Put("X", "BclientX")
+	// success, err = t.Put("J", "AclientJ")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	// time.Sleep(time.Second * 15)
+	// fmt.Println("Sleeping for 30 seconds...")
+	// time.Sleep(time.Second * 30)
 
-	// success, err = t.Put("Z", "BclientZ")
+	t.Abort()
+	fmt.Println("Just aborted the tx")
+
+	// success, err = t.Put("Y", "AclientY")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
 
-	success, v, err := t.Get("X")
-	fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
+
+	// success, err = t.Put("Z", "Aclient")
+	// fmt.Printf("Put returned: %v, %v\n", success, err)
+
+	// success, v, err := t.Get("Z")
+	// fmt.Printf("Get returned: %v, %v, %v\n", success, v, err)
 
 
-	// fmt.Println("Sleeping for 10 seconds...")
-	// time.Sleep(time.Second * 10)
+	// fmt.Println("waiting 10 seconds for system to figure out it aborted....")
+	// time.Sleep(time.Second * 1)
 
-	success, txID, err := t.Commit()
-	fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
+	// success, txID, err := t.Commit()
+	// fmt.Printf("Commit returned: %v, %v, %v\n", success, txID, err)
 
 	// success, err = t.Put("C", "Aclient")
 	// fmt.Printf("Put returned: %v, %v\n", success, err)
